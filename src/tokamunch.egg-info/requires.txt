@@ -1,5 +1,0 @@
-libtokamap
-imas_data_dictionary
-
-[dev]
-pytest

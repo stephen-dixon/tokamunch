@@ -53,7 +53,7 @@ where = ["src"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-local_scheme = "none" #"node-and-date"
+local_scheme = "no-local-version" #"node-and-date"
 write_to = "src/tokamunch/_version.py"
 
 [tool.pytest.ini_options]

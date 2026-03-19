@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "setuptools_scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokamunch"
+dynamic = ["version"]
+description = "IMAS utility functions for generating IDS mappings using libtokamap"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+authors = [
+    { name = "Stephen Dixon", email = "stephen.dixon@ukaea.uk" }
+]
+
+keywords = ["tokamap", "libtokamap", "IMAS", "IDS", "mappings"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License"
+]
+
+dependencies = [
+    "libtokamap",
+    "imas_data_dictionary",
+    "numpy",
+    # "pyuda" # temporarily for testing...
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+#     "pytest-cov",
+#     "black",
+#     "ruff",
+#     "mypy"
+]
+
+[project.urls]
+Homepage = "https://github.com/stephen-dixon/tokamunch"
+Repository = "https://github.com/stephen-dixon/tokamunch"
+Issues = "https://github.com/stephen-dixon/tokamunch/issues"
+
+[project.scripts]
+imunch = "tokamunch.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+write_to = "src/tokamunch/_version.py"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+
+# [tool.black]
+# line-length = 88
+# target-version = ["py39"]
+#
+# [tool.ruff]
+# line-length = 88
+# target-version = "py39"
+#
+# [tool.mypy]
+# python_version = "3.9"
+# strict = true

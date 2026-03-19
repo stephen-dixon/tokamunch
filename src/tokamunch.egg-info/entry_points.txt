@@ -1,0 +1,2 @@
+[console_scripts]
+imunch = tokamunch.cli:main

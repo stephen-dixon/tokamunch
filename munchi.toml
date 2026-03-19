@@ -1,0 +1,18 @@
+[mapper]
+config = "config.toml"
+device = "mastu"
+
+[run]
+default_shot = 47125
+
+[data_sources.UDA]
+plugin = "pyuda"
+args.host = "uda2.hpc.l"
+args.port = 59876
+args.plugin_name = "UDA"
+
+[data_sources.GEOMETRY]
+plugin = "pyuda"
+args.host = "uda2.hpc.l"
+args.port = 59876
+args.plugin_name = "GEOMETRY"

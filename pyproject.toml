@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "libtokamap",
     "imas_data_dictionary",
-    "numpy",
+    # "numpy",
     # "pyuda" # temporarily for testing...
 ]
 

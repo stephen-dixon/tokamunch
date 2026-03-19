@@ -5,7 +5,7 @@ from enum import Enum, auto
 
 
 class NodeType(Enum):
-    STRUCT = auto()
+    SIMPLE_NODE = auto()
     ARRAY_STRUCT = auto()
 
 

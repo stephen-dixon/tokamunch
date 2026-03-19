@@ -21,26 +21,28 @@ def ensure_ids_arrays_resized(
     write_context: WriteContext | None = None,
     skip_root_segment: bool = True,
 ) -> None:
-    seg_list = list(segments)
-    if skip_root_segment and seg_list:
-        seg_list = seg_list[1:]
+    full_seg_list = list(segments)
+    walk_seg_list = full_seg_list[1:] if skip_root_segment and full_seg_list else full_seg_list
 
     ctx = write_context or WriteContext()
     current = ids_obj
-    built: list[IDSNode] = []
 
-    for seg in seg_list:
+    built_full: list[IDSNode] = []
+    if skip_root_segment and full_seg_list:
+        built_full.append(full_seg_list[0])
+
+    for seg in walk_seg_list:
         child = getattr(current, seg.name)
 
-        if seg.node_type is NodeType.STRUCT:
+        if seg.node_type is NodeType.SIMPLE_NODE:
             current = child
-            built.append(seg)
+            built_full.append(seg)
             continue
 
         if seg.index is None:
             raise ValueError(f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}")
 
-        query_nodes = [*built, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)]
+        query_nodes = [*built_full, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)]
         query_path = render_array_length_query_path(query_nodes)
 
         if query_path not in ctx.resized_arrays:
@@ -53,7 +55,7 @@ def ensure_ids_arrays_resized(
             ctx.resized_arrays.add(query_path)
 
         current = child[seg.index]
-        built.append(seg)
+        built_full.append(seg)
 
 
 def resolve_ids_segments(
@@ -72,7 +74,7 @@ def resolve_ids_segments(
     for seg in seg_list:
         child = getattr(current, seg.name)
 
-        if seg.node_type is NodeType.STRUCT:
+        if seg.node_type is NodeType.SIMPLE_NODE:
             current = child
             continue
 
@@ -103,7 +105,7 @@ def resolve_ids_parent(
     for seg in seg_list[:-1]:
         child = getattr(current, seg.name)
 
-        if seg.node_type is NodeType.STRUCT:
+        if seg.node_type is NodeType.SIMPLE_NODE:
             current = child
             continue
 

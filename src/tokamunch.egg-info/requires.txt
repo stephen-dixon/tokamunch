@@ -1,4 +1,5 @@
 libtokamap
 imas_data_dictionary
-numpy
-pyuda
+
+[dev]
+pytest

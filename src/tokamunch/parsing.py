@@ -29,7 +29,7 @@ def parse_schema_path(path: str, interner: SegmentInterner | None = None) -> Ite
                 raise ValueError(f"Invalid array segment in {path!r}")
             yield segment_factory(name, NodeType.ARRAY_STRUCT)
         else:
-            yield segment_factory(sanitised, NodeType.STRUCT)
+            yield segment_factory(sanitised, NodeType.SIMPLE_NODE)
 
 
 def parse_concrete_path(path: str) -> Iterator[IDSNode]:
@@ -45,7 +45,7 @@ def parse_concrete_path(path: str) -> Iterator[IDSNode]:
         index_str = match.group("index")
 
         if index_str is None:
-            yield IDSNode(name=name, node_type=NodeType.STRUCT, index=None)
+            yield IDSNode(name=name, node_type=NodeType.SIMPLE_NODE, index=None)
         else:
             yield IDSNode(name=name, node_type=NodeType.ARRAY_STRUCT, index=int(index_str))
 

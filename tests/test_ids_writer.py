@@ -51,10 +51,10 @@ def test_ensure_ids_arrays_resized_resizes_once_per_concrete_array_prefix() -> N
         "core_profiles/profiles_1d[1]/ion": 3,
     }
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         IDSNode("ion", NodeType.ARRAY_STRUCT, 2),
-        IDSNode("density", NodeType.STRUCT),
+        IDSNode("density", NodeType.SIMPLE_NODE),
     ]
 
     ensure_ids_arrays_resized(
@@ -83,7 +83,7 @@ def test_resolve_ids_segments_after_resize() -> None:
         "core_profiles/profiles_1d[1]/ion": 3,
     }
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         IDSNode("ion", NodeType.ARRAY_STRUCT, 2),
     ]
@@ -98,16 +98,16 @@ def test_resolve_ids_parent_returns_parent_and_final_segment() -> None:
     ids = FakeNode()
     array_sizes = {"core_profiles/profiles_1d": 1}
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 0),
-        IDSNode("time", NodeType.STRUCT),
+        IDSNode("time", NodeType.SIMPLE_NODE),
     ]
 
     ensure_ids_arrays_resized(ids, segments, array_sizes, skip_root_segment=True)
     parent, final_seg = resolve_ids_parent(ids, segments, skip_root_segment=True)
 
     assert parent is ids.profiles_1d[0]
-    assert final_seg == IDSNode("time", NodeType.STRUCT, None)
+    assert final_seg == IDSNode("time", NodeType.SIMPLE_NODE, None)
 
 
 def test_set_ids_value_sets_struct_leaf() -> None:
@@ -117,10 +117,10 @@ def test_set_ids_value_sets_struct_leaf() -> None:
         "core_profiles/profiles_1d[1]/ion": 3,
     }
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         IDSNode("ion", NodeType.ARRAY_STRUCT, 2),
-        IDSNode("density", NodeType.STRUCT),
+        IDSNode("density", NodeType.SIMPLE_NODE),
     ]
 
     ensure_ids_arrays_resized(ids, segments, array_sizes, skip_root_segment=True)
@@ -132,7 +132,7 @@ def test_set_ids_value_sets_struct_leaf() -> None:
 def test_set_ids_value_rejects_array_struct_assignment() -> None:
     ids = FakeNode()
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
     ]
 
@@ -148,10 +148,10 @@ def test_resize_and_set_ids_value_combines_both_steps() -> None:
         "core_profiles/profiles_1d[1]/ion": 3,
     }
     segments = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         IDSNode("ion", NodeType.ARRAY_STRUCT, 2),
-        IDSNode("density", NodeType.STRUCT),
+        IDSNode("density", NodeType.SIMPLE_NODE),
     ]
 
     resize_and_set_ids_value(

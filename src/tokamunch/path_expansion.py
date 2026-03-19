@@ -18,7 +18,7 @@ def expand_ids_path_trie_segments(
 
     def recurse(node: TrieNode, built: list[IDSNode]) -> Iterator[tuple[IDSNode, ...]]:
         for ids_node, child in node.children.items():
-            if ids_node.node_type is NodeType.STRUCT:
+            if ids_node.node_type is NodeType.SIMPLE_NODE:
                 built.append(ids_node)
                 if not leaves_only or is_leaf_node(child):
                     yield tuple(built)

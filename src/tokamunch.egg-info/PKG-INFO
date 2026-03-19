@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: tokamunch
-Version: 0.0.post1+g54fbcfd11
+Version: 0.0.post2+gbcedbb4f0.d20260319
 Summary: IMAS utility functions for generating IDS mappings using libtokamap
 Author-email: Stephen Dixon <stephen.dixon@ukaea.uk>
 License: MIT
@@ -16,8 +16,8 @@ Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: libtokamap
 Requires-Dist: imas_data_dictionary
-Requires-Dist: numpy
-Requires-Dist: pyuda
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
 Dynamic: license-file
 
 # tokamunch

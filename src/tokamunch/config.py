@@ -15,7 +15,8 @@ except ModuleNotFoundError:  # pragma: no cover
 class DataSourceConfig:
     mapper_name: str
     plugin: str
-    options: dict[str, Any] = field(default_factory=dict)
+    enabled: bool = False
+    args: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

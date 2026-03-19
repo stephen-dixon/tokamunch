@@ -43,7 +43,7 @@ Repository = "https://github.com/stephen-dixon/tokamunch"
 Issues = "https://github.com/stephen-dixon/tokamunch/issues"
 
 [project.scripts]
-imunch = "tokamunch.cli:main"
+munchi = "tokamunch.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

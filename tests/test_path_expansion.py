@@ -57,24 +57,24 @@ def test_expand_ids_path_trie_nested_arrays_to_segments() -> None:
     got = list(expand_ids_path_trie_segments(trie, get_length))
 
     assert got == [
-        (IDSNode("core_profiles", NodeType.STRUCT, None),),
+        (IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),),
         (
-            IDSNode("core_profiles", NodeType.STRUCT, None),
+            IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
             IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 0),
         ),
         (
-            IDSNode("core_profiles", NodeType.STRUCT, None),
+            IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
             IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 0),
-            IDSNode("time", NodeType.STRUCT, None),
+            IDSNode("time", NodeType.SIMPLE_NODE, None),
         ),
         (
-            IDSNode("core_profiles", NodeType.STRUCT, None),
+            IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
             IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         ),
         (
-            IDSNode("core_profiles", NodeType.STRUCT, None),
+            IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
             IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
-            IDSNode("time", NodeType.STRUCT, None),
+            IDSNode("time", NodeType.SIMPLE_NODE, None),
         ),
     ]
 

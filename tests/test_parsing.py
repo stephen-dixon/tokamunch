@@ -20,10 +20,10 @@ def test_parse_schema_path_plain_and_array() -> None:
     got = list(parse_schema_path("core_profiles/profiles_1d(:)/ion(:)/density"))
 
     assert got == [
-        IDSNode("core_profiles", NodeType.STRUCT, None),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, None),
         IDSNode("ion", NodeType.ARRAY_STRUCT, None),
-        IDSNode("density", NodeType.STRUCT, None),
+        IDSNode("density", NodeType.SIMPLE_NODE, None),
     ]
 
 
@@ -31,10 +31,10 @@ def test_parse_concrete_path_plain_and_array() -> None:
     got = list(parse_concrete_path("core_profiles/profiles_1d[1]/ion[2]/density"))
 
     assert got == [
-        IDSNode("core_profiles", NodeType.STRUCT, None),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE, None),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 1),
         IDSNode("ion", NodeType.ARRAY_STRUCT, 2),
-        IDSNode("density", NodeType.STRUCT, None),
+        IDSNode("density", NodeType.SIMPLE_NODE, None),
     ]
 
 
@@ -45,25 +45,25 @@ def test_parse_concrete_path_invalid_segment_raises() -> None:
 
 def test_render_schema_path() -> None:
     nodes = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT),
-        IDSNode("density", NodeType.STRUCT),
+        IDSNode("density", NodeType.SIMPLE_NODE),
     ]
     assert render_schema_path(nodes) == "core_profiles/profiles_1d(:)/density"
 
 
 def test_render_concrete_path() -> None:
     nodes = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 3),
-        IDSNode("density", NodeType.STRUCT),
+        IDSNode("density", NodeType.SIMPLE_NODE),
     ]
     assert render_concrete_path(nodes) == "core_profiles/profiles_1d[3]/density"
 
 
 def test_render_array_length_query_path_for_root_array() -> None:
     nodes = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, None),
     ]
     assert render_array_length_query_path(nodes) == "core_profiles/profiles_1d"
@@ -71,7 +71,7 @@ def test_render_array_length_query_path_for_root_array() -> None:
 
 def test_render_array_length_query_path_for_nested_array() -> None:
     nodes = [
-        IDSNode("core_profiles", NodeType.STRUCT),
+        IDSNode("core_profiles", NodeType.SIMPLE_NODE),
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, 0),
         IDSNode("ion", NodeType.ARRAY_STRUCT, None),
     ]

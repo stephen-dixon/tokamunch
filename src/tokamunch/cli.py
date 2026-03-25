@@ -1,187 +1,131 @@
 from __future__ import annotations
 
 import argparse
-from typing import Any
+import sys
+from pathlib import Path
 
-import tokamunch as tm
+from .checks import check_context, check_ids
+from .config import render_cli_config_template
+from .context import load_context
+from .mapping import collect_mapped_values
+from .outputs import build_json_results, print_summary, render_text_records, write_json_file
+from .selection import PathSelection, iter_concrete_ids_paths, path_matches
+from .templates import build_blank_mapping_template
+from .write_ids import write_h5_output
 
 
-def should_suppress_mapping_error(exc: Exception) -> bool:
-    return str(exc).startswith("Mapping error: failed to find mapping for")
+PATH_SYNTAX_EPILOG = """Path syntax:
+  Concrete runtime path:
+    magnetics/flux_loop[0]/position[0]/r
+
+  Non-concrete IDS/schema path:
+    magnetics/flux_loop(:)/position(:)/r
+
+  Mapping-template path:
+    magnetics/flux_loop[#]/position[#]/r
+
+Notes:
+  - 'map --path' expects one concrete path.
+  - 'map --ids magnetics' expands all concrete paths for that IDS.
+  - '--match' filters expanded concrete paths, e.g. 'magnetics/flux_loop*'.
+  - Array-struct nodes ending in '/#' are collapsed in mapping templates:
+      magnetics/flux_loop[#]/position/#  ->  magnetics/flux_loop[#]/position
+"""
 
 
-def create_ids_object(ids_name: str) -> Any:
-    import imas
-    raise NotImplementedError("Wire this to your imas-python IDS factory")
+def cmd_paths(args: argparse.Namespace) -> int:
+    ctx = load_context(args.config, args.device, args.shot)
+    helper = ctx.ids_helper(args.ids)
 
-
-def cmd_paths(args: argparse.Namespace) -> None:
-    cfg = tm.load_cli_config(args.config)
-    mapper = tm.create_mapper_from_config(cfg)
-
-    device = args.device or cfg.mapper.device
-    tokamap = tm.TokamapInterface(
-        mapper,
-        device,
-        {"shot": args.shot if args.shot is not None else cfg.run.default_shot},
-    )
-    array_length_callback = tokamap.get_array_length
-
-    helper = tm.IDSHelper.from_ids_name(args.ids)
-
-    for path in helper.iter_concrete_paths(
-        array_length_callback,
+    lines: list[str] = []
+    for path in iter_concrete_ids_paths(
+        helper,
+        ctx.tokamap.get_array_length,
         leaves_only=args.leaves_only,
     ):
-        print(path)
+        if path_matches(path, args.match):
+            lines.append(path)
+
+    if lines:
+        print("\n".join(lines))
+    return 0
 
 
-def cmd_map(args: argparse.Namespace) -> None:
-    cfg = tm.load_cli_config(args.config)
-    mapper = tm.create_mapper_from_config(cfg)
-
-    device = args.device or cfg.mapper.device
-    tokamap = tm.TokamapInterface(
-        mapper,
-        device,
-        {"shot": args.shot if args.shot is not None else cfg.run.default_shot},
-    )
-    helper = tm.IDSHelper.from_ids_name(args.ids)
-
-    for segments in helper.iter_concrete_segments(
-        tokamap.get_array_length,
+def cmd_map(args: argparse.Namespace) -> int:
+    ctx = load_context(args.config, args.device, args.shot)
+    selection = PathSelection(
+        ids=args.ids,
+        path=args.path,
+        match=args.match,
         leaves_only=args.leaves_only,
-    ):
-        ids_path = tm.render_concrete_path(segments)
-
-        try:
-            res = tokamap.map(ids_path)
-            if res is not None and hasattr(res, "dtype") and res.dtype == "S1":
-                res = res.tobytes().decode()
-
-            if res is not None:
-                print(f"{ids_path}: {res}")
-
-        except Exception as exc:
-            if args.verbose_errors or not should_suppress_mapping_error(exc):
-                print(f"{ids_path}: {exc}")
-
-
-def cmd_map_one(args: argparse.Namespace) -> None:
-    cfg = tm.load_cli_config(args.config)
-    mapper = tm.create_mapper_from_config(cfg)
-
-    device = args.device or cfg.mapper.device
-    tokamap = tm.TokamapInterface(
-        mapper,
-        device,
-        {"shot": args.shot if args.shot is not None else cfg.run.default_shot},
     )
-    ids_path = args.path
-    try:
-        res = tokamap.map(ids_path)
-        if res is not None and hasattr(res, "dtype") and res.dtype == "S1":
-            res = res.tobytes().decode()
-
-        if res is not None:
-            print(f"{ids_path}: {res}")
-
-    except Exception as exc:
-        if args.verbose_errors or not should_suppress_mapping_error(exc):
-            print(f"{ids_path}: {exc}")
-
-
-def cmd_write(args: argparse.Namespace) -> None:
-    cfg = tm.load_cli_config(args.config)
-    mapper = tm.create_mapper_from_config(cfg)
-
-    device = args.device or cfg.mapper.device
-    tokamap = tm.TokamapInterface(
-        mapper,
-        device,
-        {"shot": args.shot if args.shot is not None else cfg.run.default_shot},
-    )
-    helper = tm.IDSHelper.from_ids_name(args.ids)
-
-    ids_obj = create_ids_object(args.ids)
-    write_ctx = tm.WriteContext()
-
-    for segments in helper.iter_concrete_segments(
-        tokamap.get_array_length,
-        leaves_only=True,
-    ):
-        ids_path = tm.render_concrete_path(segments)
-
-        try:
-            value = tokamap.map(ids_path)
-            if value is not None and hasattr(value, "dtype") and value.dtype == "S1":
-                value = value.tobytes().decode()
-
-            if value is None:
-                continue
-
-            tm.resize_and_set_ids_value(
-                ids_obj,
-                segments,
-                value,
-                helper.array_sizes,
-                write_context=write_ctx,
-                skip_root_segment=True,
-            )
-
-        except Exception as exc:
-            if args.verbose_errors or not should_suppress_mapping_error(exc):
-                print(f"{ids_path}: {exc}")
-
-    print(ids_obj)
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="munchi",
-        description="IDS mapping CLI",
+    records, summary = collect_mapped_values(
+        ctx,
+        selection,
+        verbose_errors=args.verbose_errors,
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    if args.output is None:
+        text = render_text_records(records, verbose_errors=args.verbose_errors)
+        if text:
+            print(text)
+        print_summary(summary)
+        return 1 if summary.has_unexpected_errors else 0
 
-    parser_paths = subparsers.add_parser("paths", help="Expand and print IDS paths")
-    add_common_arguments(parser_paths)
-    parser_paths.set_defaults(func=cmd_paths)
-    parser_paths.add_argument(
-        "--ids",
-        type=str,
-        required=True,
-        help="IDS name (e.g. magnetics, core_profiles)",
+    output_path = Path(args.output)
+    suffix = output_path.suffix.lower()
+
+    if suffix == ".json":
+        write_json_file(output_path, build_json_results(records), force=args.force)
+        print(f"Wrote JSON output to {output_path}")
+        print_summary(summary)
+        return 1 if summary.has_unexpected_errors else 0
+
+    if suffix == ".h5":
+        write_h5_output(output_path, records=records, force=args.force)
+        print_summary(summary)
+        return 1 if summary.has_unexpected_errors else 0
+
+    raise ValueError(
+        f"Unsupported output file extension for {output_path!s}. "
+        "Use no --output for terminal text, .json for JSON, or .h5 for IDS output."
     )
 
-    parser_map = subparsers.add_parser("map", help="Map IDS paths and print values")
-    add_common_arguments(parser_map)
-    parser_map.add_argument("--verbose-errors", action="store_true")
-    parser_map.set_defaults(func=cmd_map)
-    parser_map.add_argument(
-        "--ids",
-        type=str,
-        required=True,
-        help="IDS name (e.g. magnetics, core_profiles)",
+
+def cmd_init_config(args: argparse.Namespace) -> int:
+    output_path = Path(args.output)
+    if output_path.exists() and not args.force:
+        raise FileExistsError(f"Refusing to overwrite existing file: {output_path}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(render_cli_config_template(), encoding="utf-8")
+    print(f"Wrote skeleton config to {output_path}")
+    return 0
+
+
+def cmd_init_mapping(args: argparse.Namespace) -> int:
+    mapping = build_blank_mapping_template(
+        args.ids,
+        leaves_only=args.leaves_only,
     )
+    output_path = Path(args.output)
+    write_json_file(output_path, mapping, force=args.force)
+    print(f"Wrote blank mapping template to {output_path}")
+    return 0
 
-    # parser_write = subparsers.add_parser("write", help="Write mapped data into an IDS object")
-    # add_common_arguments(parser_write)
-    # parser_write.add_argument("--verbose-errors", action="store_true")
-    # parser_write.set_defaults(func=cmd_write)
 
-    parser_map_path = subparsers.add_parser("map-one", help="Map IDS paths and print values")
-    add_common_arguments(parser_map_path)
-    parser_map_path.add_argument("--verbose-errors", action="store_true")
-    parser_map_path.set_defaults(func=cmd_map_one)
-    parser_map_path.add_argument(
-        "--path",
-        type=str,
-        required=True,
-        help="IDS name (e.g. magnetics, core_profiles)",
-    )
+def cmd_check(args: argparse.Namespace) -> int:
+    ctx = load_context(args.config, args.device, args.shot)
+    check_context(ctx)
+    print("Config loaded successfully.")
+    print(f"Device: {ctx.device}")
+    print(f"Shot: {ctx.shot}")
 
-    return parser
+    if args.ids:
+        count = check_ids(args.ids, leaves_only=args.leaves_only)
+        print(f"IDS recognised: {args.ids}")
+        print(f"Schema paths found: {count}")
+
+    return 0
 
 
 def add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -189,7 +133,7 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--config",
         type=str,
         default="munchi.toml",
-        help="tokamap-ids CLI config file",
+        help="munchi config file",
     )
     parser.add_argument(
         "--device",
@@ -206,14 +150,166 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--leaves-only",
         action="store_true",
-        help="Only iterate leaf paths",
+        help="Only include leaf paths",
     )
+
+
+def add_match_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--match",
+        type=str,
+        default=None,
+        help="Glob-style filter applied to expanded concrete runtime paths, e.g. 'magnetics/flux_loop*'",
+    )
+
+
+def add_ids_or_path_arguments(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--ids",
+        type=str,
+        help="IDS name to expand into concrete runtime paths, e.g. 'magnetics'",
+    )
+    group.add_argument(
+        "--path",
+        type=str,
+        help="Single concrete runtime path, e.g. 'magnetics/flux_loop[0]/position[0]/r'",
+    )
+
+
+def add_force_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists",
+    )
+
+
+def add_verbose_errors_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--verbose-errors",
+        action="store_true",
+        help="Show suppressed 'missing mapping' errors as well",
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="munchi",
+        description="IDS mapping CLI",
+        epilog=PATH_SYNTAX_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    parser_paths = subparsers.add_parser(
+        "paths",
+        help="Expand and print concrete IDS runtime paths",
+        epilog=PATH_SYNTAX_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add_common_arguments(parser_paths)
+    parser_paths.add_argument(
+        "--ids",
+        type=str,
+        required=True,
+        help="IDS name to expand, e.g. 'magnetics'",
+    )
+    add_match_argument(parser_paths)
+    parser_paths.set_defaults(func=cmd_paths)
+
+    parser_map = subparsers.add_parser(
+        "map",
+        help="Map one concrete path or all concrete paths of an IDS",
+        epilog=PATH_SYNTAX_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add_common_arguments(parser_map)
+    add_ids_or_path_arguments(parser_map)
+    add_match_argument(parser_map)
+    add_force_argument(parser_map)
+    add_verbose_errors_argument(parser_map)
+    parser_map.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Output destination. Default: terminal text. Use .json for JSON results or .h5 for IDS output.",
+    )
+    parser_map.set_defaults(func=cmd_map)
+
+    parser_init_config = subparsers.add_parser(
+        "init-config",
+        help="Create a skeleton munchi config file",
+    )
+    parser_init_config.add_argument(
+        "--output",
+        type=str,
+        default="munchi.toml",
+        help="Output config path",
+    )
+    add_force_argument(parser_init_config)
+    parser_init_config.set_defaults(func=cmd_init_config)
+
+    parser_init_mapping = subparsers.add_parser(
+        "init-mapping",
+        help="Create a blank JSON mapping template from IDS schema paths",
+        epilog=PATH_SYNTAX_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser_init_mapping.add_argument(
+        "--ids",
+        type=str,
+        required=True,
+        help="IDS name, e.g. 'magnetics'",
+    )
+    parser_init_mapping.add_argument(
+        "--output",
+        type=str,
+        default="mapping.json",
+        help="Output mapping JSON path",
+    )
+    parser_init_mapping.add_argument(
+        "--leaves-only",
+        action="store_true",
+        help="Only include leaf schema paths",
+    )
+    add_force_argument(parser_init_mapping)
+    parser_init_mapping.set_defaults(func=cmd_init_mapping)
+
+    parser_check = subparsers.add_parser(
+        "check",
+        help="Validate config/mapper setup and optionally an IDS schema",
+        epilog=PATH_SYNTAX_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add_common_arguments(parser_check)
+    parser_check.add_argument(
+        "--ids",
+        type=str,
+        default=None,
+        help="Optional IDS name to validate and inspect",
+    )
+    parser_check.set_defaults(func=cmd_check)
+
+    return parser
 
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    args.func(args)
+
+    try:
+        raise SystemExit(args.func(args))
+    except FileExistsError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
+    except NotImplementedError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
+    except Exception as exc:
+        print(f"Fatal error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

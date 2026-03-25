@@ -14,8 +14,8 @@ except ModuleNotFoundError:  # pragma: no cover
 @dataclass(slots=True)
 class DataSourceConfig:
     mapper_name: str
-    package: str
-    enabled: bool = False
+    plugin: str
+    enabled: bool = True
     args: dict[str, Any] = field(default_factory=dict)
 
 
@@ -83,3 +83,24 @@ def load_cli_config(path: str | Path) -> CLIConfig:
         run=run,
         data_sources=data_sources,
     )
+
+
+def render_cli_config_template() -> str:
+    return """# Skeleton munchi configuration file
+# Fill in the values for your local setup.
+
+[mapper]
+config = "mapping.json"
+device = "mast"
+
+[run]
+default_shot = 0
+
+# Each data source entry is keyed by the mapper data-source name.
+# Add, remove, or duplicate sections as required.
+#
+# [data_sources.pyuda]
+# plugin = "pyuda"
+# enabled = true
+# args = { host = "localhost", port = 56565, plugin_name = "uda" }
+"""

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
 
-from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .imas_dd import generate_ids_paths
-from .types import ExpansionContext, IDSNode, TrieNode
+from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .trie import build_ids_path_trie, iter_schema_paths_from_trie
+from .types import ExpansionContext, IDSNode, TrieNode
 
 
 class IDSHelper:
@@ -27,6 +27,12 @@ class IDSHelper:
 
     def iter_schema_paths(self) -> Iterator[str]:
         yield from iter_schema_paths_from_trie(self._trie)
+
+    def iter_non_concrete_paths(self, *, leaves_only: bool = False) -> Iterator[str]:
+        for path in self.iter_schema_paths():
+            if leaves_only and path.endswith("/#"):
+                continue
+            yield path
 
     def iter_concrete_segments(
         self,

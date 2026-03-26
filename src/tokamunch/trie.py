@@ -26,11 +26,12 @@ def build_ids_path_trie(ids_paths: Iterable[str]) -> TrieNode:
     return root
 
 
-def iter_schema_paths_from_trie(root: TrieNode) -> Iterator[str]:
+def generate_schema_paths_from_trie(root: TrieNode, *, leaves_only: bool = False) -> Iterator[str]:
     def recurse(node: TrieNode, built: list[IDSNode]) -> Iterator[str]:
         for ids_node, child in node.children.items():
             built.append(ids_node)
-            yield render_schema_path(built)
+            if not leaves_only or is_leaf_node(child):
+                yield render_schema_path(built)
             yield from recurse(child, built)
             built.pop()
 

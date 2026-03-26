@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Iterable
 
 import tokamunch as tm
 
@@ -21,27 +21,14 @@ def path_matches(ids_path: str, pattern: str | None) -> bool:
     return pattern is None or fnmatch.fnmatch(ids_path, pattern)
 
 
-def iter_concrete_ids_paths(
-    helper: tm.IDSHelper,
-    array_length_callback: Any,
-    *,
-    leaves_only: bool,
-) -> Iterable[str]:
-    yield from helper.iter_concrete_paths(
-        array_length_callback,
-        leaves_only=leaves_only,
-    )
-
-
-def iter_selected_paths(selection: PathSelection, ctx: CLIContext) -> Iterable[str]:
+def generate_selected_paths(selection: PathSelection, ctx: CLIContext) -> Iterable[str]:
     if selection.path is not None:
         yield selection.path
         return
 
     assert selection.ids is not None
     helper = ctx.ids_helper(selection.ids)
-    for ids_path in iter_concrete_ids_paths(
-        helper,
+    for ids_path in helper.generate_concrete_paths(
         ctx.tokamap.get_array_length,
         leaves_only=selection.leaves_only,
     ):

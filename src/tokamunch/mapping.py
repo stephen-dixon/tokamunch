@@ -6,8 +6,8 @@ from typing import Any
 
 from .config import ConcurrencyMode
 from .context import CLIContext
-from .data_source_interface import TokamapInterface, _MISSING_MAPPING_PREFIX
-from .selection import PathSelection, iter_selected_paths
+from .data_source_interface import TokamapInterface, _MISSING_MAPPING_PREFIX, _decode_s1_bytes
+from .selection import PathSelection, generate_selected_paths
 
 
 # ── error classification ──────────────────────────────────────────────────────
@@ -21,9 +21,7 @@ def should_suppress_mapping_error(exc: Exception) -> bool:
 def normalise_map_result(value: Any) -> Any:
     if value is None:
         return None
-    if hasattr(value, "dtype") and value.dtype == "S1":
-        return value.tobytes().decode()
-    return value
+    return _decode_s1_bytes(value)
 
 
 # ── record types ──────────────────────────────────────────────────────────────
@@ -63,8 +61,6 @@ _worker_tokamap: TokamapInterface | None = None
 def _init_process_worker(config_path: str, device: str, shot: int | None) -> None:
     """Run once per worker process to build a process-local mapper."""
     global _worker_tokamap
-    # Local imports: avoid importing heavy optional deps at module load time
-    # and sidestep any module-level circular-import concerns.
     from .config import load_cli_config
     from .mapper import create_mapper_from_config
 
@@ -143,13 +139,10 @@ def _map_multiprocess(
             try:
                 _path, value, error_str = future.result()
                 if error_str is not None:
-                    # Re-wrap the error string so should_suppress_mapping_error
-                    # can still classify it correctly via str(exc).
                     results.append((_path, None, RuntimeError(error_str)))
                 else:
                     results.append((_path, value, None))
             except Exception as exc:
-                # The future itself raised (worker crash, pickle error, etc.)
                 results.append((path, None, exc))
     return results
 
@@ -196,7 +189,7 @@ def collect_mapped_values(
     verbose_errors: bool,
 ) -> tuple[list[MappingRecord], MappingSummary]:
     # Phase 1: expand all concrete paths (includes remote array-length queries).
-    paths = list(iter_selected_paths(selection, ctx))
+    paths = list(generate_selected_paths(selection, ctx))
 
     # Phase 2: map each path, dispatching to the configured concurrency backend.
     concurrency = ctx.cfg.run.concurrency

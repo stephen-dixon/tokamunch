@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Iterator
 
 from .imas_dd import generate_ids_paths
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
-from .trie import build_ids_path_trie, iter_schema_paths_from_trie
+from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .types import ExpansionContext, IDSNode, TrieNode
 
 
@@ -25,16 +25,10 @@ class IDSHelper:
     def array_sizes(self) -> dict[str, int]:
         return self.expansion_context.array_sizes
 
-    def iter_schema_paths(self) -> Iterator[str]:
-        yield from iter_schema_paths_from_trie(self._trie)
+    def generate_non_concrete_paths(self, *, leaves_only: bool = False) -> Iterator[str]:
+        yield from generate_schema_paths_from_trie(self._trie, leaves_only=leaves_only)
 
-    def iter_non_concrete_paths(self, *, leaves_only: bool = False) -> Iterator[str]:
-        for path in self.iter_schema_paths():
-            if leaves_only and path.endswith("/#"):
-                continue
-            yield path
-
-    def iter_concrete_segments(
+    def generate_concrete_segments(
         self,
         arraystruct_length_callback: Callable[[str], int],
         *,
@@ -47,7 +41,7 @@ class IDSHelper:
             leaves_only=leaves_only,
         )
 
-    def iter_concrete_paths(
+    def generate_concrete_paths(
         self,
         arraystruct_length_callback: Callable[[str], int],
         *,

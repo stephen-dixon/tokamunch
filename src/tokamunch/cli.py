@@ -4,12 +4,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from .checks import check_context, check_ids
+from .checks import check_ids
 from .config import render_cli_config_template
 from .context import load_context
 from .mapping import collect_mapped_values
 from .outputs import build_json_results, print_summary, render_text_records, write_json_file
-from .selection import PathSelection, iter_concrete_ids_paths, path_matches
+from .selection import PathSelection, path_matches
 from .templates import build_blank_mapping_template
 from .write_ids import write_h5_output
 
@@ -38,8 +38,7 @@ def cmd_paths(args: argparse.Namespace) -> int:
     helper = ctx.ids_helper(args.ids)
 
     lines: list[str] = []
-    for path in iter_concrete_ids_paths(
-        helper,
+    for path in helper.generate_concrete_paths(
         ctx.tokamap.get_array_length,
         leaves_only=args.leaves_only,
     ):
@@ -115,7 +114,6 @@ def cmd_init_mapping(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     ctx = load_context(args.config, args.device, args.shot)
-    check_context(ctx)
     print("Config loaded successfully.")
     print(f"Device: {ctx.device}")
     print(f"Shot: {ctx.shot}")

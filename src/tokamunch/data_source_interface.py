@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-# The prefix of the "no mapping defined" exception that libtokamap raises.
+# Prefix of the "no mapping defined" exception that libtokamap raises.
 # Shared with mapping.py for consistent error classification.
 _MISSING_MAPPING_PREFIX = "Mapping error: failed to find mapping for"
+
+
+def _decode_s1_bytes(value: Any) -> Any:
+    """Decode a numpy S1 byte array to a Python str; pass all other values through."""
+    if hasattr(value, "dtype") and value.dtype == "S1":
+        return value.tobytes().decode()
+    return value
 
 
 class TokamapInterface:
@@ -18,18 +25,10 @@ class TokamapInterface:
             res = self.map(ids_path)
             if res is None:
                 return 0
-
-            if hasattr(res, "dtype") and res.dtype == "S1":
-                res = res.tobytes().decode()
-
-            return int(res)
+            return int(_decode_s1_bytes(res))
         except Exception as exc:
             if str(exc).startswith(_MISSING_MAPPING_PREFIX):
-                # No mapping defined for this array — treat as length 0.
                 return 0
-            # Any other exception (connection failure, auth error, etc.) is
-            # unexpected: re-raise so the caller can handle it explicitly
-            # rather than silently producing an empty expansion.
             raise
 
     def map(self, ids_path: str) -> Any:

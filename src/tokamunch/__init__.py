@@ -7,7 +7,7 @@ from .parsing import (
     render_concrete_path,
     render_array_length_query_path,
 )
-from .trie import build_ids_path_trie, iter_schema_paths_from_trie
+from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .ids_writer import (
     ensure_ids_arrays_resized,
@@ -16,7 +16,7 @@ from .ids_writer import (
     set_ids_value,
     resize_and_set_ids_value,
 )
-from .imas_dd import generate_ids_paths, generate_ids_sub_paths
+from .imas_dd import generate_ids_paths
 from .data_source_interface import TokamapInterface
 from .ids_helper import IDSHelper
 
@@ -47,7 +47,7 @@ __all__ = [
     "render_concrete_path",
     "render_array_length_query_path",
     "build_ids_path_trie",
-    "iter_schema_paths_from_trie",
+    "generate_schema_paths_from_trie",
     "expand_ids_path_trie",
     "expand_ids_path_trie_segments",
     "ensure_ids_arrays_resized",
@@ -56,7 +56,6 @@ __all__ = [
     "set_ids_value",
     "resize_and_set_ids_value",
     "generate_ids_paths",
-    "generate_ids_sub_paths",
     "TokamapInterface",
     "IDSHelper",
     "DataSource",

@@ -1,11 +1,36 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from .types import IDSNode, NodeType, WriteContext
 from .parsing import render_array_length_query_path
 
+
+# ── shared traversal helpers ──────────────────────────────────────────────────
+
+def _prepare_seg_list(segments: Iterable[IDSNode], skip_root: bool) -> list[IDSNode]:
+    seg_list = list(segments)
+    return seg_list[1:] if skip_root and seg_list else seg_list
+
+
+def _resolve_ids_path(ids_obj: Any, seg_list: list[IDSNode]) -> Any:
+    """Walk an IDS object along seg_list and return the final node."""
+    current = ids_obj
+    for seg in seg_list:
+        child = getattr(current, seg.name)
+        if seg.node_type is NodeType.SIMPLE_NODE:
+            current = child
+        else:
+            if seg.index is None:
+                raise ValueError(
+                    f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}"
+                )
+            current = child[seg.index]
+    return current
+
+
+# ── array resizing ────────────────────────────────────────────────────────────
 
 def _ensure_array_size_exact(array_obj: Any, size: int) -> None:
     current_size = len(array_obj)
@@ -22,7 +47,7 @@ def ensure_ids_arrays_resized(
     skip_root_segment: bool = True,
 ) -> None:
     full_seg_list = list(segments)
-    walk_seg_list = full_seg_list[1:] if skip_root_segment and full_seg_list else full_seg_list
+    walk_seg_list = _prepare_seg_list(full_seg_list, skip_root_segment)
 
     ctx = write_context or WriteContext()
     current = ids_obj
@@ -42,8 +67,7 @@ def ensure_ids_arrays_resized(
         if seg.index is None:
             raise ValueError(f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}")
 
-        query_nodes = [*built_full, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)]
-        query_path = render_array_length_query_path(query_nodes)
+        query_path = render_array_length_query_path([*built_full, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)])
 
         if query_path not in ctx.resized_arrays:
             try:
@@ -58,32 +82,15 @@ def ensure_ids_arrays_resized(
         built_full.append(seg)
 
 
+# ── navigation ────────────────────────────────────────────────────────────────
+
 def resolve_ids_segments(
     ids_obj: Any,
     segments: Iterable[IDSNode],
     *,
     skip_root_segment: bool = True,
 ) -> Any:
-    seg_list = list(segments)
-
-    if skip_root_segment and seg_list:
-        seg_list = seg_list[1:]
-
-    current = ids_obj
-
-    for seg in seg_list:
-        child = getattr(current, seg.name)
-
-        if seg.node_type is NodeType.SIMPLE_NODE:
-            current = child
-            continue
-
-        if seg.index is None:
-            raise ValueError(f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}")
-
-        current = child[seg.index]
-
-    return current
+    return _resolve_ids_path(ids_obj, _prepare_seg_list(segments, skip_root_segment))
 
 
 def resolve_ids_parent(
@@ -92,30 +99,13 @@ def resolve_ids_parent(
     *,
     skip_root_segment: bool = True,
 ) -> tuple[Any, IDSNode]:
-    seg_list = list(segments)
-
-    if skip_root_segment and seg_list:
-        seg_list = seg_list[1:]
-
+    seg_list = _prepare_seg_list(segments, skip_root_segment)
     if not seg_list:
         raise ValueError("Path does not contain any usable segments")
+    return _resolve_ids_path(ids_obj, seg_list[:-1]), seg_list[-1]
 
-    current = ids_obj
 
-    for seg in seg_list[:-1]:
-        child = getattr(current, seg.name)
-
-        if seg.node_type is NodeType.SIMPLE_NODE:
-            current = child
-            continue
-
-        if seg.index is None:
-            raise ValueError(f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}")
-
-        current = child[seg.index]
-
-    return current, seg_list[-1]
-
+# ── value assignment ──────────────────────────────────────────────────────────
 
 def set_ids_value(
     ids_obj: Any,

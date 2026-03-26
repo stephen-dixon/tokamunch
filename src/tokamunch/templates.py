@@ -7,8 +7,8 @@ import tokamunch as tm
 
 def non_concrete_to_mapping_template_path(path: str) -> str:
     path = path.replace("(:)", "[#]")
-    if path.endswith("/#"):
-        path = path[:-2]
+    if path.endswith("[#]"):
+        path = path[:-3]
     return path
 
 

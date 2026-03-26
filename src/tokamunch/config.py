@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,18 @@ try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib
+
+
+class ConcurrencyMode(str, Enum):
+    SERIAL = "serial"
+    THREAD = "thread"
+    PROCESS = "process"
+
+
+@dataclass(slots=True)
+class ConcurrencyConfig:
+    mode: ConcurrencyMode = ConcurrencyMode.SERIAL
+    workers: int = 1
 
 
 @dataclass(slots=True)
@@ -28,6 +41,7 @@ class MapperConfig:
 @dataclass(slots=True)
 class RunConfig:
     default_shot: int | None = None
+    concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
 
 
 @dataclass(slots=True)
@@ -46,13 +60,28 @@ def load_cli_config(path: str | Path) -> CLIConfig:
     run_raw = raw.get("run", {})
     data_sources_raw = raw.get("data_sources", {})
 
+    mapper_config_file: str = mapper_raw["config"]
+    mapper_config_path = Path(mapper_config_file)
+    if not mapper_config_path.exists():
+        raise FileNotFoundError(
+            f"Mapper config file not found: {mapper_config_path!r} "
+            f"(from 'mapper.config' in {config_path})"
+        )
+
     mapper = MapperConfig(
-        config=mapper_raw["config"],
+        config=mapper_config_file,
         device=mapper_raw["device"],
+    )
+
+    concurrency_raw = run_raw.get("concurrency", {})
+    concurrency = ConcurrencyConfig(
+        mode=ConcurrencyMode(concurrency_raw.get("mode", ConcurrencyMode.SERIAL)),
+        workers=int(concurrency_raw.get("workers", 1)),
     )
 
     run = RunConfig(
         default_shot=run_raw.get("default_shot"),
+        concurrency=concurrency,
     )
 
     data_sources: list[DataSourceConfig] = []
@@ -95,6 +124,16 @@ device = "mast"
 
 [run]
 default_shot = 0
+
+# Concurrency settings (optional).
+# mode:    "serial"  — sequential, always safe (default)
+#          "thread"  — shared mapper across threads; only use if all plugins are thread-safe
+#          "process" — each worker spawns its own mapper; safe for all plugins
+# workers: number of parallel workers (ignored when mode = "serial")
+#
+# [run.concurrency]
+# mode = "process"
+# workers = 8
 
 # Each data source entry is keyed by the mapper data-source name.
 # Add, remove, or duplicate sections as required.

@@ -32,11 +32,26 @@ def test_tokamap_interface_get_array_length_records_scalar() -> None:
     assert n == 5
 
 
-def test_tokamap_interface_get_array_length_returns_zero_on_error() -> None:
+def test_tokamap_interface_get_array_length_returns_zero_on_missing_mapping() -> None:
+    from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
+
+    class MissingMappingMapper:
+        def map(self, device, ids_path, args):
+            raise RuntimeError(f"{_MISSING_MAPPING_PREFIX} {ids_path}")
+
+    iface = TokamapInterface(MissingMappingMapper(), "mastu", {})
+
+    assert iface.get_array_length("a/b") == 0
+
+
+def test_tokamap_interface_get_array_length_raises_on_unexpected_error() -> None:
+    import pytest
+
     class RaisingMapper:
         def map(self, device, ids_path, args):
-            raise RuntimeError("boom")
+            raise RuntimeError("connection refused")
 
     iface = TokamapInterface(RaisingMapper(), "mastu", {})
 
-    assert iface.get_array_length("a/b") == 0
+    with pytest.raises(RuntimeError, match="connection refused"):
+        iface.get_array_length("a/b")

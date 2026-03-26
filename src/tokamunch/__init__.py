@@ -20,9 +20,17 @@ from .imas_dd import generate_ids_paths, generate_ids_sub_paths
 from .data_source_interface import TokamapInterface
 from .ids_helper import IDSHelper
 
-from .config import CLIConfig, MapperConfig, RunConfig, DataSourceConfig, load_cli_config
+from .config import (
+    CLIConfig,
+    MapperConfig,
+    RunConfig,
+    DataSourceConfig,
+    ConcurrencyConfig,
+    ConcurrencyMode,
+    load_cli_config,
+)
 from .mapper import create_mapper_from_config
-from .plugin_api import DataSourceFactory
+from .plugin_api import DataSource, DataSourceFactory
 
 from . import plugin_api
 
@@ -51,5 +59,8 @@ __all__ = [
     "generate_ids_sub_paths",
     "TokamapInterface",
     "IDSHelper",
+    "DataSource",
     "DataSourceFactory",
+    "ConcurrencyConfig",
+    "ConcurrencyMode",
 ]

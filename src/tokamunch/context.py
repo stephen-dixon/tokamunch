@@ -13,6 +13,7 @@ class CLIContext:
     tokamap: tm.TokamapInterface
     device: str
     shot: int
+    config_path: str
 
     def ids_helper(self, ids_name: str) -> tm.IDSHelper:
         return tm.IDSHelper.from_ids_name(ids_name)
@@ -37,4 +38,5 @@ def load_context(config: str, device: str | None, shot: int | None) -> CLIContex
         tokamap=tokamap,
         device=resolved_device,
         shot=resolved_shot,
+        config_path=config,
     )

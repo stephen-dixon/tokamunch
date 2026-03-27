@@ -1,3 +1,7 @@
+import base64
+
+import numpy as np
+
 from tokamunch.mapping import MappingRecord
 from tokamunch.outputs import (
     build_json_results,
@@ -52,6 +56,64 @@ class TestMakeJsonSafe:
                 return "opaque"
 
         assert make_json_safe(Opaque()) == "opaque"
+
+
+class TestMakeJsonSafeBinaryArrays:
+    def test_1d_array_encoded_as_dict(self) -> None:
+        arr = np.array([1.0, 2.0, 3.0])
+        result = make_json_safe(arr, binary_arrays=True)
+        assert isinstance(result, dict)
+        assert "__ndarray__" in result
+        assert "dtype" in result
+        assert "shape" in result
+
+    def test_shape_preserved(self) -> None:
+        arr = np.array([[1.0, 2.0], [3.0, 4.0]])
+        result = make_json_safe(arr, binary_arrays=True)
+        assert result["shape"] == [2, 2]
+
+    def test_dtype_preserved(self) -> None:
+        arr = np.array([1, 2, 3], dtype=np.int32)
+        result = make_json_safe(arr, binary_arrays=True)
+        assert result["dtype"] == "int32"
+
+    def test_binary_roundtrip(self) -> None:
+        arr = np.array([1.5, 2.5, 3.5], dtype=np.float64)
+        encoded = make_json_safe(arr, binary_arrays=True)
+        raw = base64.b64decode(encoded["__ndarray__"])
+        decoded = np.frombuffer(raw, dtype=encoded["dtype"]).reshape(encoded["shape"])
+        np.testing.assert_array_equal(decoded, arr)
+
+    def test_primitives_unaffected_by_binary_flag(self) -> None:
+        assert make_json_safe(42, binary_arrays=True) == 42
+        assert make_json_safe("hello", binary_arrays=True) == "hello"
+        assert make_json_safe(None, binary_arrays=True) is None
+
+    def test_list_of_arrays_encoded_when_binary(self) -> None:
+        arr = np.array([1.0])
+        result = make_json_safe([arr], binary_arrays=True)
+        assert isinstance(result[0], dict)
+        assert "__ndarray__" in result[0]
+
+    def test_default_flag_false_gives_list(self) -> None:
+        arr = np.array([1.0, 2.0])
+        result = make_json_safe(arr)
+        assert result == [1.0, 2.0]
+
+
+class TestBuildJsonResultsBinaryArrays:
+    def test_binary_flag_propagates(self) -> None:
+        arr = np.array([1.0, 2.0])
+        records = [MappingRecord(ids_path="magnetics/time", value=arr)]
+        result = build_json_results(records, binary_arrays=True)
+        assert isinstance(result["magnetics/time"], dict)
+        assert "__ndarray__" in result["magnetics/time"]
+
+    def test_default_binary_false_gives_list(self) -> None:
+        arr = np.array([1.0, 2.0])
+        records = [MappingRecord(ids_path="magnetics/time", value=arr)]
+        result = build_json_results(records)
+        assert result["magnetics/time"] == [1.0, 2.0]
 
 
 class TestBuildJsonResults:

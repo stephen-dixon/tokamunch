@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sys
 from pathlib import Path
@@ -8,13 +9,30 @@ from typing import Any
 from .mapping import MappingRecord, MappingSummary
 
 
-def make_json_safe(value: Any) -> Any:
+def _encode_ndarray_binary(arr: Any) -> dict[str, Any]:
+    """Encode a numpy array as a base64 binary blob with dtype/shape metadata.
+
+    The resulting dict is JSON-serialisable and can be decoded with::
+
+        import base64, numpy as np
+        np.frombuffer(base64.b64decode(d["__ndarray__"]), dtype=d["dtype"]).reshape(d["shape"])
+    """
+    return {
+        "__ndarray__": base64.b64encode(arr.tobytes()).decode("ascii"),
+        "dtype": str(arr.dtype),
+        "shape": list(arr.shape),
+    }
+
+
+def make_json_safe(value: Any, *, binary_arrays: bool = False) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
-        return {str(k): make_json_safe(v) for k, v in value.items()}
+        return {str(k): make_json_safe(v, binary_arrays=binary_arrays) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [make_json_safe(v) for v in value]
+        return [make_json_safe(v, binary_arrays=binary_arrays) for v in value]
+    if binary_arrays and hasattr(value, "dtype") and hasattr(value, "tobytes"):
+        return _encode_ndarray_binary(value)
     if hasattr(value, "tolist"):
         # numpy's tolist() recurses into nested arrays, producing pure Python
         # types at every level — no need for a second make_json_safe pass.
@@ -27,11 +45,13 @@ def make_json_safe(value: Any) -> Any:
     return str(value)
 
 
-def build_json_results(records: list[MappingRecord]) -> dict[str, Any]:
+def build_json_results(
+    records: list[MappingRecord], *, binary_arrays: bool = False
+) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for record in records:
         if record.ok and record.value is not None:
-            result[record.ids_path] = make_json_safe(record.value)
+            result[record.ids_path] = make_json_safe(record.value, binary_arrays=binary_arrays)
     return result
 
 

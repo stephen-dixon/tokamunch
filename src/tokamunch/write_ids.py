@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -8,8 +10,19 @@ from .mapping import MappingRecord
 from .parsing import IDSNode, NodeType, parse_concrete_path, render_array_length_query_path
 from .types import WriteContext
 
+logger = logging.getLogger(__name__)
+
 # Supported output formats and their imas-python URI schemes.
 SUPPORTED_SUFFIXES = {".h5", ".nc"}
+
+
+@dataclass
+class IdsWriteError:
+    """Captures a per-IDS write failure together with the records that couldn't be written."""
+
+    ids_name: str
+    records: list[MappingRecord]
+    cause: Exception
 
 
 def _derive_array_sizes(paths: list[str]) -> dict[str, int]:
@@ -114,7 +127,7 @@ def write_imas_output(
     records: list[MappingRecord],
     force: bool,
     array_sizes: dict[str, int] | None = None,
-) -> None:
+) -> list[IdsWriteError]:
     """Write mapped IDS records to an HDF5 or NetCDF file via imas-python.
 
     The output format is inferred from the file extension:
@@ -132,6 +145,10 @@ def write_imas_output(
     records themselves so that filtered subsets are written correctly without
     creating empty array elements in the output file.
 
+    Returns a (possibly empty) list of :class:`IdsWriteError` — one entry per
+    IDS whose ``dbentry.put()`` call raised an exception.  The remaining IDS
+    objects are still written; only the failing one is skipped.
+
     Raises ``FileExistsError`` if *path* already exists and *force* is false.
     Raises ``ImportError`` if ``imas`` is not installed.
     """
@@ -143,9 +160,16 @@ def write_imas_output(
     factory = imas.IDSFactory()
     groups = _group_records_by_ids(records)
     uri = _imas_uri(path)
+    write_errors: list[IdsWriteError] = []
 
     with imas.DBEntry(uri, "w") as dbentry:
         for ids_name, ids_records in groups.items():
-            ids_obj = getattr(factory, ids_name)()
-            _populate_ids(ids_obj, ids_records, array_sizes=array_sizes)
-            dbentry.put(ids_obj)
+            try:
+                ids_obj = getattr(factory, ids_name)()
+                _populate_ids(ids_obj, ids_records, array_sizes=array_sizes)
+                dbentry.put(ids_obj)
+            except Exception as exc:
+                logger.error("Failed to write IDS '%s': %s", ids_name, exc)
+                write_errors.append(IdsWriteError(ids_name, ids_records, exc))
+
+    return write_errors

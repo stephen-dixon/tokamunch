@@ -1,4 +1,11 @@
 from . import plugin_api
+from .convert import (
+    read_ids_records,
+    read_imas_records,
+    read_json_records,
+    records_to_ids_objects,
+    convert_file,
+)
 from .config import (
     CLIConfig,
     ConcurrencyConfig,
@@ -60,6 +67,11 @@ __all__ = [
     "TrieNode",
     "WriteContext",
     "build_ids_path_trie",
+    "convert_file",
+    "read_ids_records",
+    "read_imas_records",
+    "read_json_records",
+    "records_to_ids_objects",
     "concrete_path_to_schema_path",
     "concrete_path_to_template",
     "create_mapper_from_config",

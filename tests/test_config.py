@@ -195,6 +195,58 @@ schemas_directory = "/s"
             load_cli_config(p)
 
 
+class TestLoadCliConfigBinaryArrays:
+    _BASE = """
+[mapper]
+device = "mast"
+
+[mapper.config_params]
+mapping_directory = "/m"
+schemas_directory = "/s"
+"""
+
+    def test_default_binary_arrays_is_false(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE)
+        cfg = load_cli_config(p)
+        assert cfg.run.binary_arrays is False
+
+    def test_binary_arrays_true_parsed(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + "\n[run]\nbinary_arrays = true\n")
+        cfg = load_cli_config(p)
+        assert cfg.run.binary_arrays is True
+
+
+class TestLoadCliConfigOnImasError:
+    _BASE = """
+[mapper]
+device = "mast"
+
+[mapper.config_params]
+mapping_directory = "/m"
+schemas_directory = "/s"
+"""
+
+    def test_default_on_imas_error_is_fallback_json(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE)
+        cfg = load_cli_config(p)
+        assert cfg.run.on_imas_error == "fallback-json"
+
+    def test_raise_mode_parsed(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + '\n[run]\non_imas_error = "raise"\n')
+        cfg = load_cli_config(p)
+        assert cfg.run.on_imas_error == "raise"
+
+    def test_invalid_on_imas_error_raises(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + '\n[run]\non_imas_error = "ignore"\n')
+        with pytest.raises(ValueError, match="on_imas_error"):
+            load_cli_config(p)
+
+
 class TestLoadCliConfigDataSources:
     def test_data_sources_parsed(self, tmp_path: Path) -> None:
         munchi_cfg = tmp_path / "munchi.toml"

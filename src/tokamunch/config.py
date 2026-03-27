@@ -46,6 +46,8 @@ class RunConfig:
     default_shot: int | None = None
     concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
     log_level: str = "WARNING"
+    binary_arrays: bool = False
+    on_imas_error: str = "fallback-json"  # "fallback-json" | "raise"
 
 
 @dataclass(slots=True)
@@ -106,10 +108,22 @@ def load_cli_config(path: str | Path) -> CLIConfig:
             f"Must be one of: {', '.join(sorted(valid_levels))}"
         )
 
+    binary_arrays = bool(run_raw.get("binary_arrays", False))
+
+    on_imas_error_raw = str(run_raw.get("on_imas_error", "fallback-json")).lower()
+    valid_on_imas_error = {"fallback-json", "raise"}
+    if on_imas_error_raw not in valid_on_imas_error:
+        raise ValueError(
+            f"Invalid 'run.on_imas_error' value {on_imas_error_raw!r} in {config_path}. "
+            f"Must be one of: {', '.join(sorted(valid_on_imas_error))}"
+        )
+
     run = RunConfig(
         default_shot=run_raw.get("default_shot"),
         concurrency=concurrency,
         log_level=log_level_raw,
+        binary_arrays=binary_arrays,
+        on_imas_error=on_imas_error_raw,
     )
 
     data_sources: list[DataSourceConfig] = []
@@ -161,7 +175,9 @@ config = "config.toml"
 
 [run]
 default_shot = 0
-# log_level = "WARNING"  # DEBUG | INFO | WARNING | ERROR | CRITICAL (CLI --log-level takes precedence)
+# log_level = "WARNING"      # DEBUG | INFO | WARNING | ERROR | CRITICAL (CLI --log-level takes precedence)
+# binary_arrays = false      # Encode numpy arrays as base64 binary in JSON output (CLI --binary-arrays takes precedence)
+# on_imas_error = "fallback-json"  # What to do when an IDS fails to write: "fallback-json" | "raise"
 
 # Concurrency settings (optional).
 # mode:    "serial"  — sequential, always safe (default)

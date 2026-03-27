@@ -9,6 +9,7 @@ from pathlib import Path
 from .checks import check_ids
 from .config import CLIConfig, ConcurrencyConfig, ConcurrencyMode, render_cli_config_template
 from .context import MappingContext
+from .convert import convert_file
 from .mapping import collect_mapped_values
 from .outputs import (
     build_json_results,
@@ -20,7 +21,7 @@ from .outputs import (
 )
 from .selection import IdsSelection, MultiPathSelection, SinglePathSelection, path_matches
 from .templates import build_blank_mapping_template, load_mapping_keys
-from .write_ids import SUPPORTED_SUFFIXES, write_imas_output
+from .write_ids import SUPPORTED_SUFFIXES, IdsWriteError, write_imas_output
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,57 @@ def _apply_concurrency_overrides(args: argparse.Namespace, ctx: MappingContext) 
     if mode is not ctx.concurrency.mode or workers != ctx.concurrency.workers:
         ctx.concurrency = ConcurrencyConfig(mode=mode, workers=workers)
         logger.debug("Concurrency overridden: mode=%s workers=%d", mode.value, workers)
+
+
+def _resolve_binary_arrays(cli_flag: bool, cfg: CLIConfig | None) -> bool:
+    """Return effective binary_arrays setting: CLI flag wins when True."""
+    if cli_flag:
+        return True
+    if cfg is not None:
+        return cfg.run.binary_arrays
+    return False
+
+
+def _resolve_on_imas_error(cli_override: str | None, cfg: CLIConfig | None) -> str:
+    """Return effective on_imas_error setting: CLI override wins when given."""
+    if cli_override is not None:
+        return cli_override
+    if cfg is not None:
+        return cfg.run.on_imas_error
+    return "fallback-json"
+
+
+def _handle_imas_write_errors(
+    errors: list[IdsWriteError],
+    output_path: Path,
+    on_imas_error: str,
+    *,
+    binary_arrays: bool,
+) -> None:
+    """Log errors from write_imas_output and apply the configured error strategy."""
+    for err in errors:
+        msg = f"IDS '{err.ids_name}' failed to write: {err.cause}"
+        logger.error(msg)
+        print(f"ERROR: {msg}", file=sys.stderr)
+
+    if on_imas_error == "raise":
+        raise RuntimeError(
+            f"{len(errors)} IDS(es) could not be written to {output_path}. "
+            "See log for details."
+        )
+
+    # fallback-json: write the failed IDS records to a companion JSON file.
+    fallback_path = output_path.with_name(output_path.stem + "_fallback.json")
+    fallback_records = [r for err in errors for r in err.records]
+    write_json_file(
+        fallback_path,
+        build_json_results(fallback_records, binary_arrays=binary_arrays),
+        force=True,
+    )
+    print(
+        f"Fallback JSON for {len(errors)} failed IDS(es) written to {fallback_path}",
+        file=sys.stderr,
+    )
 
 
 def _resolve_paths_arg(values: list[str]) -> list[str]:
@@ -166,6 +218,11 @@ def cmd_map(args: argparse.Namespace) -> int:
     _apply_concurrency_overrides(args, ctx)
     logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
 
+    binary_arrays = _resolve_binary_arrays(args.binary_arrays, ctx.cli_config)
+    on_imas_error = _resolve_on_imas_error(
+        getattr(args, "on_imas_error", None), ctx.cli_config
+    )
+
     mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
 
     selection: IdsSelection | SinglePathSelection | MultiPathSelection
@@ -229,16 +286,53 @@ def cmd_map(args: argparse.Namespace) -> int:
     suffix = output_path.suffix.lower()
 
     if suffix == ".json":
-        write_json_file(output_path, build_json_results(records), force=args.force)
+        write_json_file(
+            output_path,
+            build_json_results(records, binary_arrays=binary_arrays),
+            force=args.force,
+        )
         print(f"Wrote JSON output to {output_path}")
         print_summary(summary)
         return 1 if summary.has_unexpected_errors else 0
 
     # suffix in SUPPORTED_SUFFIXES (already validated above)
-    write_imas_output(output_path, records=records, force=args.force)
+    write_errors = write_imas_output(output_path, records=records, force=args.force)
     print(f"Wrote {output_path.suffix.upper()[1:]} output to {output_path}")
+    if write_errors:
+        _handle_imas_write_errors(
+            write_errors, output_path, on_imas_error, binary_arrays=binary_arrays
+        )
     print_summary(summary)
-    return 1 if summary.has_unexpected_errors else 0
+    return 1 if (summary.has_unexpected_errors or write_errors) else 0
+
+
+def cmd_convert(args: argparse.Namespace) -> int:
+    input_path = Path(args.input)
+    output_path = Path(args.output)
+
+    binary_arrays = _resolve_binary_arrays(args.binary_arrays, None)
+    on_imas_error = _resolve_on_imas_error(
+        getattr(args, "on_imas_error", None), None
+    )
+
+    write_errors = convert_file(
+        input_path,
+        output_path,
+        ids_names=args.ids or None,
+        force=args.force,
+        binary_arrays=binary_arrays,
+        on_imas_error=on_imas_error,
+    )
+
+    print(f"Converted {input_path} → {output_path}")
+
+    if write_errors:
+        _handle_imas_write_errors(
+            write_errors, output_path, on_imas_error, binary_arrays=binary_arrays
+        )
+        return 1
+
+    return 0
 
 
 def cmd_init_config(args: argparse.Namespace) -> int:
@@ -452,6 +546,26 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Override number of parallel workers from config",
     )
+    parser_map.add_argument(
+        "--binary-arrays",
+        action="store_true",
+        default=False,
+        help=(
+            "Encode numpy arrays as base64 binary objects in JSON output "
+            "(overrides run.binary_arrays in config; default: false)"
+        ),
+    )
+    parser_map.add_argument(
+        "--on-imas-error",
+        default=None,
+        choices=["fallback-json", "raise"],
+        dest="on_imas_error",
+        help=(
+            "Action when an IDS fails to write to an IMAS file. "
+            "'fallback-json' (default) logs the error and writes failed IDS records "
+            "to a companion _fallback.json file; 'raise' stops the run immediately."
+        ),
+    )
     parser_map.set_defaults(func=cmd_map)
 
     parser_init_config = subparsers.add_parser(
@@ -492,6 +606,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_force_argument(parser_init_mapping)
     parser_init_mapping.set_defaults(func=cmd_init_mapping)
+
+    parser_convert = subparsers.add_parser(
+        "convert",
+        help="Convert data between supported file formats (.json, .h5, .nc)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Convert between munchi JSON output and imas-python IMAS files.\n\n"
+            "Supported formats: .json  .h5  .nc\n\n"
+            "Primary use case — load a non-compliant JSON into IDS objects in Python:\n"
+            "  records = read_json_records(Path('results.json'))\n"
+            "  ids_objects = records_to_ids_objects(records)\n"
+            "  ids_objects['equilibrium'].time_slice[0].time = 0.5  # add missing fields\n"
+            "  with imas.DBEntry(...) as db: db.put(ids_objects['equilibrium'])\n"
+        ),
+    )
+    parser_convert.add_argument(
+        "--input",
+        required=True,
+        metavar="FILE",
+        help="Input file (.json, .h5, or .nc)",
+    )
+    parser_convert.add_argument(
+        "--output",
+        required=True,
+        metavar="FILE",
+        help="Output file (.json, .h5, or .nc)",
+    )
+    parser_convert.add_argument(
+        "--ids",
+        nargs="+",
+        metavar="IDS",
+        default=None,
+        help=(
+            "IDS name(s) to read when the input is an IMAS file "
+            "(e.g. --ids magnetics equilibrium). Not needed for JSON input."
+        ),
+    )
+    parser_convert.add_argument(
+        "--binary-arrays",
+        action="store_true",
+        default=False,
+        help="Encode numpy arrays as base64 binary objects in JSON output",
+    )
+    parser_convert.add_argument(
+        "--on-imas-error",
+        default=None,
+        choices=["fallback-json", "raise"],
+        dest="on_imas_error",
+        help=(
+            "Action when an IDS fails to write: 'fallback-json' (default) writes "
+            "failed records to a _fallback.json companion file; 'raise' stops immediately."
+        ),
+    )
+    add_force_argument(parser_convert)
+    parser_convert.set_defaults(func=cmd_convert)
 
     parser_check = subparsers.add_parser(
         "check",

@@ -12,6 +12,7 @@ files, and validating configuration.
    config
    mapping-files
    path-syntax
+   conversion
    checks
    development
 

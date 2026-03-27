@@ -71,6 +71,7 @@ Configuration
 Path utilities
 --------------
 
+.. autofunction:: tokamunch.concrete_path_to_schema_path
 .. autofunction:: tokamunch.concrete_path_to_template
 .. autofunction:: tokamunch.parse_concrete_path
 .. autofunction:: tokamunch.parse_schema_path
@@ -99,6 +100,21 @@ IDS writers
 .. autofunction:: tokamunch.ensure_ids_arrays_resized
 .. autofunction:: tokamunch.resolve_ids_parent
 .. autofunction:: tokamunch.resolve_ids_segments
+
+.. autoclass:: tokamunch.write_ids.IdsWriteError
+   :members:
+
+Format conversion
+-----------------
+
+Functions for moving data between munchi JSON output, imas-python IMAS files
+(``.h5``, ``.nc``), and in-memory imas IDS objects.
+
+.. autofunction:: tokamunch.read_json_records
+.. autofunction:: tokamunch.records_to_ids_objects
+.. autofunction:: tokamunch.read_ids_records
+.. autofunction:: tokamunch.read_imas_records
+.. autofunction:: tokamunch.convert_file
 
 Trie
 ----

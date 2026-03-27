@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 
-from .types import ExpansionContext, IDSNode, NodeType, TrieNode
 from .parsing import render_array_length_query_path, render_concrete_path
 from .trie import is_leaf_node
+from .types import ExpansionContext, IDSNode, NodeType, TrieNode
 
 
 def expand_ids_path_trie_segments(
@@ -26,7 +26,22 @@ def expand_ids_path_trie_segments(
                 built.pop()
                 continue
 
-            query_node = IDSNode(name=ids_node.name, node_type=NodeType.ARRAY_STRUCT, index=None)
+            # A terminal ARRAY_STRUCT node (trie leaf with no children) represents
+            # an array-valued field such as `data(:)` — the (:) denotes the shape of
+            # stored data, not an array-of-structs dimension.  Treat it as a simple
+            # leaf: no length query, no index.
+            if is_leaf_node(child):
+                simple_node = IDSNode(
+                    name=ids_node.name, node_type=NodeType.SIMPLE_NODE, index=None
+                )
+                built.append(simple_node)
+                yield tuple(built)
+                built.pop()
+                continue
+
+            query_node = IDSNode(
+                name=ids_node.name, node_type=NodeType.ARRAY_STRUCT, index=None
+            )
             query_path = render_array_length_query_path([*built, query_node])
 
             if query_path not in ctx.array_sizes:
@@ -35,7 +50,9 @@ def expand_ids_path_trie_segments(
             n = ctx.array_sizes[query_path]
 
             for idx in range(n):
-                concrete_node = IDSNode(name=ids_node.name, node_type=NodeType.ARRAY_STRUCT, index=idx)
+                concrete_node = IDSNode(
+                    name=ids_node.name, node_type=NodeType.ARRAY_STRUCT, index=idx
+                )
                 built.append(concrete_node)
                 if not leaves_only or is_leaf_node(child):
                     yield tuple(built)

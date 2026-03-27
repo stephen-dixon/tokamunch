@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from importlib.metadata import entry_points
-from typing import Any, Protocol
 
 from .plugin_api import DataSourceFactory
 
@@ -21,5 +19,5 @@ def load_data_source_factory(name: str) -> DataSourceFactory:
     if len(matches) > 1:
         raise ValueError(f"Multiple data-source plugins named {name!r} found")
 
-    factory = matches[0].load()
+    factory: DataSourceFactory = matches[0].load()
     return factory

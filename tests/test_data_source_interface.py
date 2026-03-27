@@ -15,7 +15,7 @@ class FakeMapper:
 
 def test_tokamap_interface_map_passes_args() -> None:
     mapper = FakeMapper({"a/b": np.array([1, 2, 3])})
-    iface = TokamapInterface(mapper, "mastu", {"shot": 47125})
+    iface = TokamapInterface(mapper, "mastu", shot=47125)
 
     out = iface.map("a/b")
 
@@ -25,18 +25,50 @@ def test_tokamap_interface_map_passes_args() -> None:
 
 def test_tokamap_interface_get_array_length_records_scalar() -> None:
     mapper = FakeMapper({"a/b": np.array(5)})
-    iface = TokamapInterface(mapper, "mastu", {"shot": 47125})
+    iface = TokamapInterface(mapper, "mastu", shot=47125)
 
-    n = iface.get_array_length("a/b")
-
-    assert n == 5
+    assert iface.get_array_length("a/b") == 5
 
 
-def test_tokamap_interface_get_array_length_returns_zero_on_error() -> None:
+def test_tokamap_interface_get_array_length_returns_zero_on_missing_mapping() -> None:
+    from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
+
+    class MissingMappingMapper:
+        def map(self, device, ids_path, args):
+            raise RuntimeError(f"{_MISSING_MAPPING_PREFIX} {ids_path}")
+
+    iface = TokamapInterface(MissingMappingMapper(), "mastu")
+
+    assert iface.get_array_length("a/b") == 0
+
+
+def test_tokamap_interface_get_array_length_raises_on_unexpected_error() -> None:
+    import pytest
+
     class RaisingMapper:
         def map(self, device, ids_path, args):
-            raise RuntimeError("boom")
+            raise RuntimeError("connection refused")
 
-    iface = TokamapInterface(RaisingMapper(), "mastu", {})
+    iface = TokamapInterface(RaisingMapper(), "mastu")
+
+    with pytest.raises(RuntimeError, match="connection refused"):
+        iface.get_array_length("a/b")
+
+
+def test_tokamap_interface_get_array_length_returns_zero_on_system_error() -> None:
+    """SystemError from a C-level mapper bug must not crash the run.
+
+    libtokamap's C map() sometimes returns a result while an exception is set,
+    causing CPython to raise SystemError.  During path expansion there is no
+    outer try/except, so this error would bubble up and kill the whole run.
+    The fix is to treat SystemError in get_array_length as "unknown length 0"
+    with a warning, letting expansion continue for all other paths.
+    """
+
+    class SystemErrorMapper:
+        def map(self, device, ids_path, args):
+            raise SystemError("<built-in function map> returned a result with an exception set")
+
+    iface = TokamapInterface(SystemErrorMapper(), "mastu")
 
     assert iface.get_array_length("a/b") == 0

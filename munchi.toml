@@ -6,14 +6,17 @@ device = "mastu"
 default_shot = 47125
 
 [data_sources.UDA]
-package = "tokamunch-pyuda-datasource"
+plugin = "tokamunch_pyuda_datasource"
+# plugin = "pyuda"
 enabled = true
 args.host = "uda2.hpc.l"
-args.port = 59876
+# args.port = 59876
+args.port = 56565
 args.plugin_name = "UDA"
 
 [data_sources.GEOMETRY]
-package = "tokamunch-pyuda-datasource"
+plugin = "tokamunch_pyuda_datasource"
+# plugin = "pyuda"
 args.host = "uda2.hpc.l"
-args.port = 59876
+args.port = 56565
 args.plugin_name = "GEOMETRY"

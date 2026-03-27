@@ -11,6 +11,16 @@ files, and validating configuration.
    cli
    config
    mapping-files
+   mapping-annotations
    path-syntax
+   conversion
+   diff
+   profiling
    checks
    development
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Library reference
+
+   api

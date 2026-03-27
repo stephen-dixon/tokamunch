@@ -5,10 +5,10 @@ from tokamunch import (
     NodeType,
     WriteContext,
     ensure_ids_arrays_resized,
-    resolve_ids_segments,
-    resolve_ids_parent,
-    set_ids_value,
     resize_and_set_ids_value,
+    resolve_ids_parent,
+    resolve_ids_segments,
+    set_ids_value,
 )
 
 

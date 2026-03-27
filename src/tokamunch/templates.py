@@ -6,8 +6,33 @@ from typing import Any
 
 import tokamunch as tm
 
+from .imas_dd import load_ids_field_metadata
+
 # Metadata-only keys that may appear alongside "comment" in a comment stub.
 _COMMENT_STUB_ALLOWED_KEYS = frozenset({"comment", "units", "source"})
+
+
+def _field_comment(ids_name: str, schema_path: str) -> str:
+    """Return a comment string populated from IDS field metadata.
+
+    *schema_path* is a full path including the IDS name prefix, e.g.
+    ``magnetics/flux_loop(:)/position(:)/r``.  The ``documentation`` and
+    ``units`` fields from ``imas_data_dictionary`` are combined into a single
+    string: ``"Major radius [m]"`` when units are present, or just the
+    documentation text otherwise.  Returns an empty string if metadata is
+    unavailable.
+    """
+    field_meta = load_ids_field_metadata(ids_name)
+    # list_ids_fields keys are relative to the IDS root (no IDS-name prefix).
+    subpath = schema_path.split("/", 1)[1] if "/" in schema_path else schema_path
+    # Some array fields are stored with a trailing (:) marker in the metadata
+    # even when the schema path carries no array suffix (e.g. 2-D index arrays).
+    meta = field_meta.get(subpath) or field_meta.get(subpath + "(:)") or {}
+    doc = meta.get("documentation", "").strip()
+    units = meta.get("units", "").strip()
+    if doc and units:
+        return f"{doc} [{units}]"
+    return doc
 
 
 def _to_template_path(schema_path: str) -> str:
@@ -38,19 +63,19 @@ def build_blank_mapping_template(
     ids_name: str, *, leaves_only: bool
 ) -> dict[str, dict[str, Any]]:
     helper = tm.IDSHelper.from_ids_name(ids_name)
-    converted = sorted(
-        _to_template_path(path)
-        for path in helper.generate_non_concrete_paths(leaves_only=leaves_only)
+    pairs = sorted(
+        (_to_template_path(p), p)
+        for p in helper.generate_non_concrete_paths(leaves_only=leaves_only)
     )
 
     mapping: dict[str, dict[str, Any]] = {}
     duplicates: list[str] = []
 
-    for path in converted:
-        if path in mapping:
-            duplicates.append(path)
+    for template_path, schema_path in pairs:
+        if template_path in mapping:
+            duplicates.append(template_path)
             continue
-        mapping[path] = {"comment": ""}
+        mapping[template_path] = {"comment": _field_comment(ids_name, schema_path)}
 
     if duplicates:
         examples = ", ".join(repr(path) for path in duplicates[:10])
@@ -115,16 +140,15 @@ def merge_mapping_stubs(
         )
 
     helper = tm.IDSHelper.from_ids_name(ids_name)
-    all_template_paths = sorted(
-        _to_template_path(path)
-        for path in helper.generate_non_concrete_paths(leaves_only=leaves_only)
+    all_pairs = sorted(
+        (_to_template_path(p), p)
+        for p in helper.generate_non_concrete_paths(leaves_only=leaves_only)
     )
 
     existing_keys = set(existing.keys())
-    new_paths = sorted(p for p in all_template_paths if p not in existing_keys)
-
     merged: dict[str, Any] = dict(existing)
-    for path in new_paths:
-        merged[path] = {"comment": ""}
+    for template_path, schema_path in all_pairs:
+        if template_path not in existing_keys:
+            merged[template_path] = {"comment": _field_comment(ids_name, schema_path)}
 
     return merged

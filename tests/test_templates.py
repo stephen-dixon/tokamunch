@@ -151,12 +151,14 @@ class TestBuildBlankMappingTemplateStubs:
         for value in template.values():
             assert is_comment_stub(value), f"Expected stub, got {value!r}"
 
-    def test_comment_key_is_empty_string(self) -> None:
+    def test_comment_is_populated_from_data_dictionary(self) -> None:
         from tokamunch.templates import build_blank_mapping_template
 
         template = build_blank_mapping_template("magnetics", leaves_only=True)
-        for value in list(template.values())[:5]:
-            assert value == {"comment": ""}
+        for value in template.values():
+            assert isinstance(value.get("comment"), str)
+            # Comments should be non-empty strings from the IDS documentation.
+            assert value["comment"] != "", f"Expected populated comment, got {value!r}"
 
 
 # ── merge_mapping_stubs ───────────────────────────────────────────────────────

@@ -5,7 +5,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
@@ -34,8 +33,12 @@ class DataSourceConfig:
 
 @dataclass(slots=True)
 class MapperConfig:
-    config: str
     device: str
+    # Exactly one of these must be set.
+    # config:        path to a libtokamap config file (JSON or TOML).
+    # config_params: inline libtokamap config as a dict (passed in-memory).
+    config: str | None = None
+    config_params: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -60,17 +63,32 @@ def load_cli_config(path: str | Path) -> CLIConfig:
     run_raw = raw.get("run", {})
     data_sources_raw = raw.get("data_sources", {})
 
-    mapper_config_file: str = mapper_raw["config"]
-    mapper_config_path = Path(mapper_config_file)
-    if not mapper_config_path.exists():
-        raise FileNotFoundError(
-            f"Mapper config file not found: {mapper_config_path!r} "
-            f"(from 'mapper.config' in {config_path})"
+    mapper_config_file: str | None = mapper_raw.get("config")
+    mapper_config_params: dict[str, Any] | None = mapper_raw.get("config_params")
+
+    if mapper_config_file is not None and mapper_config_params is not None:
+        raise ValueError(
+            f"'mapper.config' and 'mapper.config_params' are mutually exclusive in {config_path}. "
+            "Use one or the other."
+        )
+    if mapper_config_file is None and mapper_config_params is None:
+        raise ValueError(
+            f"One of 'mapper.config' (file path) or 'mapper.config_params' (inline table) "
+            f"must be set in {config_path}."
         )
 
+    if mapper_config_file is not None:
+        mapper_config_path = Path(mapper_config_file)
+        if not mapper_config_path.exists():
+            raise FileNotFoundError(
+                f"Mapper config file not found: {mapper_config_path!r} "
+                f"(from 'mapper.config' in {config_path})"
+            )
+
     mapper = MapperConfig(
-        config=mapper_config_file,
         device=mapper_raw["device"],
+        config=mapper_config_file,
+        config_params=mapper_config_params,
     )
 
     concurrency_raw = run_raw.get("concurrency", {})
@@ -119,8 +137,17 @@ def render_cli_config_template() -> str:
 # Fill in the values for your local setup.
 
 [mapper]
-config = "mapping.json"
 device = "mast"
+
+# Option A: point to a libtokamap config file (JSON or TOML).
+config = "config.toml"
+
+# Option B: supply libtokamap config inline (mutually exclusive with 'config').
+# [mapper.config_params]
+# mapping_directory = "/path/to/mappings"
+# schemas_directory = "/path/to/schemas"
+# trace = false
+# cache = true
 
 [run]
 default_shot = 0

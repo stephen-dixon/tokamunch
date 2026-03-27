@@ -5,11 +5,11 @@ from tokamunch import (
     NodeType,
     concrete_path_to_template,
     normalise_schema_segment,
-    parse_schema_path,
     parse_concrete_path,
-    render_schema_path,
-    render_concrete_path,
+    parse_schema_path,
     render_array_length_query_path,
+    render_concrete_path,
+    render_schema_path,
 )
 
 

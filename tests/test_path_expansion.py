@@ -1,7 +1,7 @@
 from tokamunch import (
+    ExpansionContext,
     IDSNode,
     NodeType,
-    ExpansionContext,
     build_ids_path_trie,
     expand_ids_path_trie,
     expand_ids_path_trie_segments,

@@ -1,6 +1,5 @@
 from tokamunch import build_ids_path_trie, generate_schema_paths_from_trie
 
-
 _SCHEMA_PATHS = [
     "core_profiles/time",
     "core_profiles/profiles_1d(:)",

@@ -16,7 +16,9 @@ def _to_template_path(schema_path: str) -> str:
     return schema_path.replace("(:)", "[#]")
 
 
-def build_blank_mapping_template(ids_name: str, *, leaves_only: bool) -> dict[str, dict[str, Any]]:
+def build_blank_mapping_template(
+    ids_name: str, *, leaves_only: bool
+) -> dict[str, dict[str, Any]]:
     helper = tm.IDSHelper.from_ids_name(ids_name)
     converted = sorted(
         _to_template_path(path)
@@ -52,5 +54,7 @@ def load_mapping_keys(path: Path) -> frozenset[str]:
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):
-        raise ValueError(f"Mapping file {path} must contain a JSON object at the top level")
+        raise ValueError(
+            f"Mapping file {path} must contain a JSON object at the top level"
+        )
     return frozenset(data.keys())

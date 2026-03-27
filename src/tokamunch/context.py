@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import tokamunch as tm
-from .config import ConcurrencyConfig
+
+from .config import CLIConfig, ConcurrencyConfig
 
 
 @dataclass
@@ -13,16 +14,18 @@ class MappingContext:
 
     Can be constructed directly for programmatic (library) use, or via
     ``from_config`` to load settings from a TOML config file for CLI use.
+
+    ``cli_config`` is required for process-based concurrency: each worker
+    process receives the full ``CLIConfig`` and reconstructs its own mapper
+    without needing any config file to be present on disk.
     """
 
     mapper: Any
     tokamap: tm.TokamapInterface
     device: str
     shot: int | None
-    # None when constructed programmatically (not from a config file).
-    # Required for process-based concurrency, which re-initialises a mapper
-    # in each worker process by re-reading the config.
-    config_path: str | None = None
+    # None when constructed programmatically without a config file.
+    cli_config: CLIConfig | None = None
     concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
 
     def ids_helper(self, ids_name: str) -> tm.IDSHelper:
@@ -35,7 +38,7 @@ class MappingContext:
         *,
         device: str | None = None,
         shot: int | None = None,
-    ) -> "MappingContext":
+    ) -> MappingContext:
         """Build a MappingContext from a munchi TOML config file.
 
         ``device`` and ``shot`` override the values in the config when provided.
@@ -53,6 +56,6 @@ class MappingContext:
             tokamap=tokamap,
             device=resolved_device,
             shot=resolved_shot,
-            config_path=config,
+            cli_config=cfg,
             concurrency=cfg.run.concurrency,
         )

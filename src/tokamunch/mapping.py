@@ -2,21 +2,26 @@ from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias
 
-from .config import ConcurrencyMode
+from .config import CLIConfig, ConcurrencyMode
 from .context import MappingContext
-from .data_source_interface import TokamapInterface, _MISSING_MAPPING_PREFIX, _decode_s1_bytes
+from .data_source_interface import (
+    _MISSING_MAPPING_PREFIX,
+    TokamapInterface,
+    _decode_s1_bytes,
+)
 from .selection import Selection, generate_selected_paths
 
-
 # ── error classification ──────────────────────────────────────────────────────
+
 
 def should_suppress_mapping_error(exc: Exception) -> bool:
     return str(exc).startswith(_MISSING_MAPPING_PREFIX)
 
 
 # ── result normalisation ──────────────────────────────────────────────────────
+
 
 def normalise_map_result(value: Any) -> Any:
     if value is None:
@@ -25,6 +30,7 @@ def normalise_map_result(value: Any) -> Any:
 
 
 # ── record types ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class MappingRecord:
@@ -58,14 +64,12 @@ class MappingSummary:
 _worker_tokamap: TokamapInterface | None = None
 
 
-def _init_process_worker(config_path: str, device: str, shot: int | None) -> None:
-    """Run once per worker process to build a process-local mapper."""
+def _init_process_worker(cli_config: CLIConfig, device: str, shot: int | None) -> None:
+    """Run once per worker process to build a process-local mapper from a CLIConfig."""
     global _worker_tokamap
-    from .config import load_cli_config
     from .mapper import create_mapper_from_config
 
-    cfg = load_cli_config(config_path)
-    mapper = create_mapper_from_config(cfg)
+    mapper = create_mapper_from_config(cli_config)
     _worker_tokamap = TokamapInterface(mapper, device, shot=shot)
 
 
@@ -86,10 +90,11 @@ def _process_worker_map(ids_path: str) -> tuple[str, Any, str | None]:
 # ── raw result type ───────────────────────────────────────────────────────────
 # (ids_path, value_or_None, exception_or_None)
 
-_RawResult = tuple[str, Any, Exception | None]
+_RawResult: TypeAlias = tuple[str, Any, Exception | None]
 
 
 # ── execution strategies ──────────────────────────────────────────────────────
+
 
 def _map_serial(tokamap: TokamapInterface, paths: list[str]) -> list[_RawResult]:
     results: list[_RawResult] = []
@@ -105,7 +110,9 @@ def _thread_map_one(tokamap: TokamapInterface, path: str) -> Any:
     return normalise_map_result(tokamap.map(path))
 
 
-def _map_threaded(tokamap: TokamapInterface, paths: list[str], workers: int) -> list[_RawResult]:
+def _map_threaded(
+    tokamap: TokamapInterface, paths: list[str], workers: int
+) -> list[_RawResult]:
     """Map paths concurrently using threads. Requires all plugins to be thread-safe."""
     results: list[_RawResult] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -120,7 +127,7 @@ def _map_threaded(tokamap: TokamapInterface, paths: list[str], workers: int) -> 
 
 
 def _map_multiprocess(
-    config_path: str,
+    cli_config: CLIConfig,
     device: str,
     shot: int | None,
     paths: list[str],
@@ -131,7 +138,7 @@ def _map_multiprocess(
     with ProcessPoolExecutor(
         max_workers=workers,
         initializer=_init_process_worker,
-        initargs=(config_path, device, shot),
+        initargs=(cli_config, device, shot),
     ) as pool:
         futures = {pool.submit(_process_worker_map, path): path for path in paths}
         for future in as_completed(futures):
@@ -148,6 +155,7 @@ def _map_multiprocess(
 
 
 # ── record assembly ───────────────────────────────────────────────────────────
+
 
 def _build_records(
     raw_results: list[_RawResult],
@@ -171,12 +179,15 @@ def _build_records(
                 summary.suppressed_errors += 1
             else:
                 summary.unexpected_errors += 1
-            records.append(MappingRecord(ids_path=ids_path, error=exc, suppressed=suppressed))
+            records.append(
+                MappingRecord(ids_path=ids_path, error=exc, suppressed=suppressed)
+            )
 
     return records, summary
 
 
 # ── public API ────────────────────────────────────────────────────────────────
+
 
 def map_path(ctx: MappingContext, ids_path: str) -> Any:
     return normalise_map_result(ctx.tokamap.map(ids_path))
@@ -198,12 +209,14 @@ def collect_mapped_values(
     elif concurrency.mode == ConcurrencyMode.THREAD:
         raw = _map_threaded(ctx.tokamap, paths, concurrency.workers)
     elif concurrency.mode == ConcurrencyMode.PROCESS:
-        if ctx.config_path is None:
+        if ctx.cli_config is None:
             raise RuntimeError(
-                "Process-based concurrency requires a config file path. "
-                "Use MappingContext.from_config() or set config_path explicitly."
+                "Process-based concurrency requires a CLIConfig. "
+                "Use MappingContext.from_config() or set cli_config explicitly."
             )
-        raw = _map_multiprocess(ctx.config_path, ctx.device, ctx.shot, paths, concurrency.workers)
+        raw = _map_multiprocess(
+            ctx.cli_config, ctx.device, ctx.shot, paths, concurrency.workers
+        )
     else:
         raise ValueError(f"Unknown concurrency mode: {concurrency.mode!r}")
 

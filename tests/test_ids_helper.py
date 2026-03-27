@@ -1,4 +1,4 @@
-from tokamunch import IDSHelper, build_ids_path_trie
+from tokamunch import IDSHelper
 
 
 def _make_helper(*schema_paths: str) -> IDSHelper:
@@ -8,6 +8,7 @@ def _make_helper(*schema_paths: str) -> IDSHelper:
 def _constant_length(n: int):
     def callback(path: str) -> int:
         return n
+
     return callback
 
 

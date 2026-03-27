@@ -8,11 +8,15 @@ from .checks import check_ids
 from .config import render_cli_config_template
 from .context import MappingContext
 from .mapping import collect_mapped_values
-from .outputs import build_json_results, print_summary, render_text_records, write_json_file
+from .outputs import (
+    build_json_results,
+    print_summary,
+    render_text_records,
+    write_json_file,
+)
 from .selection import IdsSelection, SinglePathSelection, path_matches
 from .templates import build_blank_mapping_template, load_mapping_keys
 from .write_ids import write_h5_output
-
 
 PATH_SYNTAX_EPILOG = """Path syntax:
   Concrete runtime path:

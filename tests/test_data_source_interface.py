@@ -27,7 +27,7 @@ def test_tokamap_interface_get_array_length_records_scalar() -> None:
     mapper = FakeMapper({"a/b": np.array(5)})
     iface = TokamapInterface(mapper, "mastu", shot=47125)
 
-    n = iface.get_array_length("a/b")
+    assert iface.get_array_length("a/b") == 5
 
 
 def test_tokamap_interface_get_array_length_returns_zero_on_missing_mapping() -> None:

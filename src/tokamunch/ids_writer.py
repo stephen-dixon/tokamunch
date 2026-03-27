@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from typing import Any
 
-from .types import IDSNode, NodeType, WriteContext
 from .parsing import render_array_length_query_path
-
+from .types import IDSNode, NodeType, WriteContext
 
 # ── shared traversal helpers ──────────────────────────────────────────────────
+
 
 def _prepare_seg_list(segments: Iterable[IDSNode], skip_root: bool) -> list[IDSNode]:
     seg_list = list(segments)
@@ -31,6 +31,7 @@ def _resolve_ids_path(ids_obj: Any, seg_list: list[IDSNode]) -> Any:
 
 
 # ── array resizing ────────────────────────────────────────────────────────────
+
 
 def _ensure_array_size_exact(array_obj: Any, size: int) -> None:
     current_size = len(array_obj)
@@ -65,9 +66,13 @@ def ensure_ids_arrays_resized(
             continue
 
         if seg.index is None:
-            raise ValueError(f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}")
+            raise ValueError(
+                f"Concrete IDS access requires an index for ARRAY_STRUCT segment {seg.name!r}"
+            )
 
-        query_path = render_array_length_query_path([*built_full, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)])
+        query_path = render_array_length_query_path(
+            [*built_full, IDSNode(seg.name, NodeType.ARRAY_STRUCT, None)]
+        )
 
         if query_path not in ctx.resized_arrays:
             try:
@@ -83,6 +88,7 @@ def ensure_ids_arrays_resized(
 
 
 # ── navigation ────────────────────────────────────────────────────────────────
+
 
 def resolve_ids_segments(
     ids_obj: Any,
@@ -107,6 +113,7 @@ def resolve_ids_parent(
 
 # ── value assignment ──────────────────────────────────────────────────────────
 
+
 def set_ids_value(
     ids_obj: Any,
     segments: Iterable[IDSNode],
@@ -114,7 +121,9 @@ def set_ids_value(
     *,
     skip_root_segment: bool = True,
 ) -> None:
-    parent, final_seg = resolve_ids_parent(ids_obj, segments, skip_root_segment=skip_root_segment)
+    parent, final_seg = resolve_ids_parent(
+        ids_obj, segments, skip_root_segment=skip_root_segment
+    )
 
     if final_seg.node_type is NodeType.ARRAY_STRUCT:
         raise ValueError(

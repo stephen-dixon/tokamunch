@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from functools import lru_cache
+from functools import cache
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_ids_fields(ids_name: str) -> tuple[str, ...]:
     from imas_data_dictionary import idsinfo as ids
 

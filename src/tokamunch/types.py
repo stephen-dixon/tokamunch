@@ -19,7 +19,7 @@ class IDSNode:
 @dataclass(slots=True)
 class TrieNode:
     ids_node: IDSNode | None = None
-    children: dict[IDSNode, "TrieNode"] = field(default_factory=dict)
+    children: dict[IDSNode, TrieNode] = field(default_factory=dict)
     parent: TrieNode | None = None
     depth: int = 0
 

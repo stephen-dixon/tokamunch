@@ -1,6 +1,4 @@
-import pytest
-
-from tokamunch.mapping import MappingRecord, MappingSummary
+from tokamunch.mapping import MappingRecord
 from tokamunch.outputs import (
     build_json_results,
     make_json_safe,
@@ -28,18 +26,21 @@ class TestMakeJsonSafe:
 
     def test_numpy_1d_array(self) -> None:
         import numpy as np
+
         arr = np.array([1.0, 2.0, 3.0])
         result = make_json_safe(arr)
         assert result == [1.0, 2.0, 3.0]
 
     def test_numpy_2d_array(self) -> None:
         import numpy as np
+
         arr = np.array([[1, 2], [3, 4]])
         result = make_json_safe(arr)
         assert result == [[1, 2], [3, 4]]
 
     def test_numpy_scalar(self) -> None:
         import numpy as np
+
         val = np.float64(3.14)
         result = make_json_safe(val)
         assert isinstance(result, float)

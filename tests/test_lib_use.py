@@ -13,8 +13,10 @@ IDSHelper = tm.IDSHelper
 # Minimal fakes — no config files, no CLI setup needed
 # ---------------------------------------------------------------------------
 
+
 class MissingMappingMapper:
     """Raises the standard 'no mapping' error for every path."""
+
     _PREFIX = "Mapping error: failed to find mapping for"
 
     def map(self, device: str, ids_path: str, args: dict) -> Any:
@@ -23,6 +25,7 @@ class MissingMappingMapper:
 
 class LookupMapper:
     """Returns values from a fixed dict; falls back to MissingMapping for unknown paths."""
+
     _PREFIX = "Mapping error: failed to find mapping for"
 
     def __init__(self, values: dict[str, Any], lengths: dict[str, int] | None = None):
@@ -78,11 +81,13 @@ def _ctx_with_schema(
 # TokamapInterface construction
 # ---------------------------------------------------------------------------
 
+
 class TestTokamapInterfaceConstruction:
     def test_shot_encoded_in_args(self) -> None:
         class CapturingMapper:
             def __init__(self):
                 self.calls: list[tuple] = []
+
             def map(self, device, ids_path, args):
                 self.calls.append((device, ids_path, args))
                 return 42
@@ -97,6 +102,7 @@ class TestTokamapInterfaceConstruction:
         class CapturingMapper:
             def __init__(self):
                 self.last_args: dict = {}
+
             def map(self, device, ids_path, args):
                 self.last_args = args
                 return 0
@@ -111,12 +117,15 @@ class TestTokamapInterfaceConstruction:
         class CapturingMapper:
             def __init__(self):
                 self.last_args: dict = {}
+
             def map(self, device, ids_path, args):
                 self.last_args = args
                 return 0
 
         capturing = CapturingMapper()
-        iface = tm.TokamapInterface(capturing, "device", shot=99, extra_args={"host": "localhost"})
+        iface = tm.TokamapInterface(
+            capturing, "device", shot=99, extra_args={"host": "localhost"}
+        )
         iface.map("x")
 
         assert capturing.last_args == {"shot": 99, "host": "localhost"}
@@ -125,6 +134,7 @@ class TestTokamapInterfaceConstruction:
 # ---------------------------------------------------------------------------
 # MappingContext direct construction
 # ---------------------------------------------------------------------------
+
 
 class TestMappingContextDirectConstruction:
     def test_map_path_without_config(self) -> None:
@@ -154,21 +164,26 @@ class TestMappingContextDirectConstruction:
 # IDSHelper — direct construction from schema paths (no IDS name required)
 # ---------------------------------------------------------------------------
 
+
 class TestIDSHelperDirectConstruction:
     def test_build_from_schema_paths(self) -> None:
-        helper = IDSHelper([
-            "magnetics/time",
-            "magnetics/flux_loop(:)/field",
-        ])
+        helper = IDSHelper(
+            [
+                "magnetics/time",
+                "magnetics/flux_loop(:)/field",
+            ]
+        )
         paths = set(helper.generate_non_concrete_paths())
         assert "magnetics/time" in paths
         assert "magnetics/flux_loop(:)/field" in paths
 
     def test_expand_concrete_paths(self) -> None:
-        helper = IDSHelper([
-            "magnetics/flux_loop(:)",
-            "magnetics/flux_loop(:)/field",
-        ])
+        helper = IDSHelper(
+            [
+                "magnetics/flux_loop(:)",
+                "magnetics/flux_loop(:)/field",
+            ]
+        )
         lengths = {"magnetics/flux_loop": 3}
         paths = list(helper.generate_concrete_paths(lengths.get, leaves_only=True))
 
@@ -196,6 +211,7 @@ class TestIDSHelperDirectConstruction:
 # ---------------------------------------------------------------------------
 # collect_mapped_values — end-to-end programmatic use
 # ---------------------------------------------------------------------------
+
 
 class TestCollectMappedValuesLibUse:
     def test_single_path_mapped_successfully(self) -> None:
@@ -238,8 +254,10 @@ class TestCollectMappedValuesLibUse:
     def test_mapping_keys_filter_excludes_unmatched_path(self) -> None:
         ctx = _make_ctx(LookupMapper({"magnetics/flux_loop[0]/field": 5.0}))
         keys = frozenset({"magnetics/flux_loop[#]/r"})
-        sel = SinglePathSelection(path="magnetics/flux_loop[0]/field", mapping_keys=keys)
-        records, summary = collect_mapped_values(ctx, sel, verbose_errors=False)
+        sel = SinglePathSelection(
+            path="magnetics/flux_loop[0]/field", mapping_keys=keys
+        )
+        _records, summary = collect_mapped_values(ctx, sel, verbose_errors=False)
 
         # path template is flux_loop[#]/field which is not in keys
         assert summary.total_paths == 0
@@ -249,7 +267,9 @@ class TestCollectMappedValuesLibUse:
 
         ctx = _make_ctx(
             LookupMapper({}),
-            concurrency=tm.ConcurrencyConfig(mode=tm.ConcurrencyMode.PROCESS, workers=2),
+            concurrency=tm.ConcurrencyConfig(
+                mode=tm.ConcurrencyMode.PROCESS, workers=2
+            ),
         )
         # cli_config is None when constructed directly without from_config()
         assert ctx.cli_config is None

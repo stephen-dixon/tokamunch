@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
-from .types import IDSNode, SegmentInterner, TrieNode
 from .parsing import parse_schema_path, render_schema_path
+from .types import IDSNode, SegmentInterner, TrieNode
 
 
 def insert_path(root: TrieNode, ids_segments: Iterable[IDSNode]) -> None:
@@ -26,7 +26,9 @@ def build_ids_path_trie(ids_paths: Iterable[str]) -> TrieNode:
     return root
 
 
-def generate_schema_paths_from_trie(root: TrieNode, *, leaves_only: bool = False) -> Iterator[str]:
+def generate_schema_paths_from_trie(
+    root: TrieNode, *, leaves_only: bool = False
+) -> Iterator[str]:
     def recurse(node: TrieNode, built: list[IDSNode]) -> Iterator[str]:
         for ids_node, child in node.children.items():
             built.append(ids_node)

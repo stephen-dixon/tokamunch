@@ -1,7 +1,10 @@
-import pytest
-
 from tokamunch import IDSHelper
-from tokamunch.selection import IdsSelection, SinglePathSelection, _included, generate_selected_paths
+from tokamunch.selection import (
+    IdsSelection,
+    SinglePathSelection,
+    _included,
+    generate_selected_paths,
+)
 
 
 class FakeTokamap:
@@ -23,26 +26,67 @@ class FakeCtx:
 
 class TestIncluded:
     def test_no_filters_always_included(self) -> None:
-        assert _included("magnetics/flux_loop[0]/field", match=None, mapping_keys=None) is True
+        assert (
+            _included("magnetics/flux_loop[0]/field", match=None, mapping_keys=None)
+            is True
+        )
 
     def test_match_filter(self) -> None:
-        assert _included("magnetics/flux_loop[0]/field", match="magnetics/flux_loop*", mapping_keys=None) is True
-        assert _included("magnetics/b_field_pol_probe[0]/field", match="magnetics/flux_loop*", mapping_keys=None) is False
+        assert (
+            _included(
+                "magnetics/flux_loop[0]/field",
+                match="magnetics/flux_loop*",
+                mapping_keys=None,
+            )
+            is True
+        )
+        assert (
+            _included(
+                "magnetics/b_field_pol_probe[0]/field",
+                match="magnetics/flux_loop*",
+                mapping_keys=None,
+            )
+            is False
+        )
 
     def test_mapping_keys_filter(self) -> None:
         keys = frozenset({"magnetics/flux_loop[#]/field"})
-        assert _included("magnetics/flux_loop[0]/field", match=None, mapping_keys=keys) is True
-        assert _included("magnetics/flux_loop[1]/field", match=None, mapping_keys=keys) is True
-        assert _included("magnetics/b_field_pol_probe[0]/field", match=None, mapping_keys=keys) is False
+        assert (
+            _included("magnetics/flux_loop[0]/field", match=None, mapping_keys=keys)
+            is True
+        )
+        assert (
+            _included("magnetics/flux_loop[1]/field", match=None, mapping_keys=keys)
+            is True
+        )
+        assert (
+            _included(
+                "magnetics/b_field_pol_probe[0]/field", match=None, mapping_keys=keys
+            )
+            is False
+        )
 
     def test_mapping_keys_and_match_are_combined(self) -> None:
         keys = frozenset({"magnetics/flux_loop[#]/field", "magnetics/flux_loop[#]/r"})
         # Passes both filters.
-        assert _included("magnetics/flux_loop[0]/field", match="*field*", mapping_keys=keys) is True
+        assert (
+            _included(
+                "magnetics/flux_loop[0]/field", match="*field*", mapping_keys=keys
+            )
+            is True
+        )
         # In mapping keys but excluded by match.
-        assert _included("magnetics/flux_loop[0]/r", match="*field*", mapping_keys=keys) is False
+        assert (
+            _included("magnetics/flux_loop[0]/r", match="*field*", mapping_keys=keys)
+            is False
+        )
         # Passes match but not in mapping keys.
-        assert _included("magnetics/something_else[0]/field", match="*field*", mapping_keys=keys) is False
+        assert (
+            _included(
+                "magnetics/something_else[0]/field", match="*field*", mapping_keys=keys
+            )
+            is False
+        )
 
     def test_mapping_keys_none_means_no_filter(self) -> None:
         assert _included("anything/at/all", match=None, mapping_keys=None) is True
@@ -105,14 +149,22 @@ class TestGenerateSelectedPathsSinglePathSelection:
     def test_yields_path_when_no_filter(self) -> None:
         ctx = self._make_ctx()
         sel = SinglePathSelection(path="magnetics/flux_loop[0]/field")
-        assert list(generate_selected_paths(sel, ctx)) == ["magnetics/flux_loop[0]/field"]
+        assert list(generate_selected_paths(sel, ctx)) == [
+            "magnetics/flux_loop[0]/field"
+        ]
 
     def test_filtered_by_mapping_keys(self) -> None:
         ctx = self._make_ctx()
         keys = frozenset({"magnetics/flux_loop[#]/field"})
 
-        sel_match = SinglePathSelection(path="magnetics/flux_loop[0]/field", mapping_keys=keys)
-        assert list(generate_selected_paths(sel_match, ctx)) == ["magnetics/flux_loop[0]/field"]
+        sel_match = SinglePathSelection(
+            path="magnetics/flux_loop[0]/field", mapping_keys=keys
+        )
+        assert list(generate_selected_paths(sel_match, ctx)) == [
+            "magnetics/flux_loop[0]/field"
+        ]
 
-        sel_no_match = SinglePathSelection(path="magnetics/other[0]/field", mapping_keys=keys)
+        sel_no_match = SinglePathSelection(
+            path="magnetics/other[0]/field", mapping_keys=keys
+        )
         assert list(generate_selected_paths(sel_no_match, ctx)) == []

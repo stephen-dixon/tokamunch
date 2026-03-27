@@ -1,13 +1,9 @@
-import pytest
-
+from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
 from tokamunch.mapping import (
-    MappingRecord,
-    MappingSummary,
     _build_records,
     normalise_map_result,
     should_suppress_mapping_error,
 )
-from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
 
 
 class TestNormaliseMapResult:
@@ -21,11 +17,13 @@ class TestNormaliseMapResult:
 
     def test_decodes_s1_numpy_array(self) -> None:
         import numpy as np
+
         arr = np.frombuffer(b"hello", dtype="S1")
         assert normalise_map_result(arr) == "hello"
 
     def test_non_s1_numpy_array_passthrough(self) -> None:
         import numpy as np
+
         arr = np.array([1, 2, 3])
         result = normalise_map_result(arr)
         assert (result == arr).all()
@@ -37,7 +35,9 @@ class TestShouldSuppressMappingError:
         assert should_suppress_mapping_error(exc) is True
 
     def test_does_not_suppress_other_errors(self) -> None:
-        assert should_suppress_mapping_error(RuntimeError("connection refused")) is False
+        assert (
+            should_suppress_mapping_error(RuntimeError("connection refused")) is False
+        )
         assert should_suppress_mapping_error(ValueError("bad value")) is False
 
     def test_prefix_must_match_exactly(self) -> None:
@@ -102,7 +102,7 @@ class TestBuildRecords:
             ("c/d", None, suppressed_exc),
             ("d/e", None, RuntimeError("boom")),
         ]
-        records, summary = _build_records(raw, verbose_errors=False)
+        _records, summary = _build_records(raw, verbose_errors=False)
 
         assert summary.total_paths == 4
         assert summary.mapped == 1

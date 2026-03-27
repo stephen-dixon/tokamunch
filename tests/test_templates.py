@@ -1,14 +1,18 @@
 import json
-import pytest
 from pathlib import Path
 
+import pytest
+
 from tokamunch import IDSHelper
-from tokamunch.templates import _to_template_path, build_blank_mapping_template, load_mapping_keys
+from tokamunch.templates import _to_template_path, load_mapping_keys
 
 
 class TestToTemplatePath:
     def test_replaces_schema_array_markers(self) -> None:
-        assert _to_template_path("magnetics/flux_loop(:)/field") == "magnetics/flux_loop[#]/field"
+        assert (
+            _to_template_path("magnetics/flux_loop(:)/field")
+            == "magnetics/flux_loop[#]/field"
+        )
 
     def test_multiple_array_levels(self) -> None:
         result = _to_template_path("core_profiles/profiles_1d(:)/ion(:)/density")
@@ -29,24 +33,25 @@ class TestBuildBlankMappingTemplate:
     def test_all_paths_present_as_keys(self) -> None:
         # Patch IDSHelper.from_ids_name by passing directly via build_blank_mapping_template
         # through a mock IDSHelper — instead test _to_template_path + IDSHelper together.
-        helper = IDSHelper([
-            "magnetics/time",
-            "magnetics/flux_loop(:)",
-            "magnetics/flux_loop(:)/field",
-        ])
-        converted = {
-            _to_template_path(p)
-            for p in helper.generate_non_concrete_paths()
-        }
+        helper = IDSHelper(
+            [
+                "magnetics/time",
+                "magnetics/flux_loop(:)",
+                "magnetics/flux_loop(:)/field",
+            ]
+        )
+        converted = {_to_template_path(p) for p in helper.generate_non_concrete_paths()}
         assert "magnetics/time" in converted
         assert "magnetics/flux_loop[#]/field" in converted
         assert "magnetics/flux_loop[#]" in converted
 
     def test_leaves_only_excludes_intermediates(self) -> None:
-        helper = IDSHelper([
-            "magnetics/flux_loop(:)",
-            "magnetics/flux_loop(:)/field",
-        ])
+        helper = IDSHelper(
+            [
+                "magnetics/flux_loop(:)",
+                "magnetics/flux_loop(:)/field",
+            ]
+        )
         leaf_paths = {
             _to_template_path(p)
             for p in helper.generate_non_concrete_paths(leaves_only=True)

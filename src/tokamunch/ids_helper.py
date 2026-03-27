@@ -14,7 +14,7 @@ class IDSHelper:
         self._expansion_context = ExpansionContext()
 
     @classmethod
-    def from_ids_name(cls, ids_name: str) -> "IDSHelper":
+    def from_ids_name(cls, ids_name: str) -> IDSHelper:
         return cls(generate_ids_paths(ids_name))
 
     @property
@@ -29,7 +29,9 @@ class IDSHelper:
         """Discard all cached array-length results so the next expansion re-queries."""
         self._expansion_context = ExpansionContext()
 
-    def generate_non_concrete_paths(self, *, leaves_only: bool = False) -> Iterator[str]:
+    def generate_non_concrete_paths(
+        self, *, leaves_only: bool = False
+    ) -> Iterator[str]:
         yield from generate_schema_paths_from_trie(self._trie, leaves_only=leaves_only)
 
     def generate_concrete_segments(

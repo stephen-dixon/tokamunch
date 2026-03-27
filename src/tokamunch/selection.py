@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import fnmatch
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
-
-import tokamunch as tm
+from typing import TypeAlias
 
 from .context import MappingContext
 from .parsing import concrete_path_to_template
@@ -29,7 +28,7 @@ class SinglePathSelection:
 
 
 # Public type alias — callers use this for annotations.
-Selection = IdsSelection | SinglePathSelection
+Selection: TypeAlias = IdsSelection | SinglePathSelection
 
 
 def path_matches(ids_path: str, pattern: str | None) -> bool:
@@ -42,12 +41,9 @@ def _included(
     match: str | None,
     mapping_keys: frozenset[str] | None,
 ) -> bool:
-    if not path_matches(ids_path, match):
-        return False
-    if mapping_keys is not None:
-        if concrete_path_to_template(ids_path) not in mapping_keys:
-            return False
-    return True
+    return path_matches(ids_path, match) and (
+        mapping_keys is None or concrete_path_to_template(ids_path) in mapping_keys
+    )
 
 
 def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterable[str]:
@@ -61,5 +57,7 @@ def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterab
         ctx.tokamap.get_array_length,
         leaves_only=selection.leaves_only,
     ):
-        if _included(ids_path, match=selection.match, mapping_keys=selection.mapping_keys):
+        if _included(
+            ids_path, match=selection.match, mapping_keys=selection.mapping_keys
+        ):
             yield ids_path

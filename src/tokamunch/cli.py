@@ -16,7 +16,7 @@ from .outputs import (
 )
 from .selection import IdsSelection, SinglePathSelection, path_matches
 from .templates import build_blank_mapping_template, load_mapping_keys
-from .write_ids import write_h5_output
+from .write_ids import SUPPORTED_SUFFIXES, write_imas_output
 
 PATH_SYNTAX_EPILOG = """Path syntax:
   Concrete runtime path:
@@ -56,10 +56,11 @@ def cmd_paths(args: argparse.Namespace) -> int:
 def cmd_map(args: argparse.Namespace) -> int:
     if args.output is not None:
         output_path = Path(args.output)
-        if output_path.suffix.lower() not in {".json", ".h5"}:
+        if output_path.suffix.lower() not in {".json", *SUPPORTED_SUFFIXES}:
             raise ValueError(
                 f"Unsupported output file extension for {output_path!s}. "
-                "Use no --output for terminal text, .json for JSON, or .h5 for HDF5."
+                "Use no --output for terminal text, .json for JSON, "
+                ".h5 for HDF5, or .nc for NetCDF."
             )
 
     ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
@@ -100,8 +101,9 @@ def cmd_map(args: argparse.Namespace) -> int:
         print_summary(summary)
         return 1 if summary.has_unexpected_errors else 0
 
-    # suffix == ".h5" (already validated above)
-    write_h5_output(output_path, records=records, force=args.force)
+    # suffix in SUPPORTED_SUFFIXES (already validated above)
+    write_imas_output(output_path, records=records, force=args.force)
+    print(f"Wrote {output_path.suffix.upper()[1:]} output to {output_path}")
     print_summary(summary)
     return 1 if summary.has_unexpected_errors else 0
 
@@ -247,7 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default=None,
-        help="Output destination. Default: terminal text. Use .json for JSON results.",
+        help="Output destination. Default: terminal text. Use .json for JSON, .h5 for HDF5, .nc for NetCDF (imas-python required for .h5/.nc).",
     )
     parser_map.add_argument(
         "--mapping",

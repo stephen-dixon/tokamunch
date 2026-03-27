@@ -29,6 +29,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+imas = [
+    "imas",
+]
 dev = [
     "pytest",
     "black>=24",

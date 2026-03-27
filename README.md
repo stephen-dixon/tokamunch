@@ -10,11 +10,19 @@ This is mostly vibes and slop for now.
 
 ## Documentation
 
-Hosted [here](https://stephen-dixon.github.io/tokamunch/)
+Hosted [here](https://stephen-dixon.github.io/tokamunch/) giving API reference and CLI syntax.
+
+---
+
+## License
+
+MIT License, see [license file](https://github.com/stephen-dixon/tokamunch/blob/main/LICENSE) for more details.
 
 ---
 
 ## Installation
+
+Available on [pypi](https://test.pypi.org/project/tokamunch/)
 
 ```bash
 pip install tokamunch                   # core (JSON output only)

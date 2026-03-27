@@ -132,9 +132,9 @@ class TestMappingContextDirectConstruction:
         ctx = _make_ctx(mapper)
         assert ctx.tokamap.map("magnetics/time") == 0.5
 
-    def test_config_path_is_none_by_default(self) -> None:
+    def test_cli_config_is_none_by_default(self) -> None:
         ctx = _make_ctx(LookupMapper({}))
-        assert ctx.config_path is None
+        assert ctx.cli_config is None
 
     def test_default_concurrency_is_serial(self) -> None:
         ctx = _make_ctx(LookupMapper({}))
@@ -244,13 +244,15 @@ class TestCollectMappedValuesLibUse:
         # path template is flux_loop[#]/field which is not in keys
         assert summary.total_paths == 0
 
-    def test_process_concurrency_requires_config_path(self) -> None:
+    def test_process_concurrency_requires_cli_config(self) -> None:
         import pytest
 
         ctx = _make_ctx(
             LookupMapper({}),
             concurrency=tm.ConcurrencyConfig(mode=tm.ConcurrencyMode.PROCESS, workers=2),
         )
+        # cli_config is None when constructed directly without from_config()
+        assert ctx.cli_config is None
         sel = SinglePathSelection(path="magnetics/time")
-        with pytest.raises(RuntimeError, match="config file path"):
+        with pytest.raises(RuntimeError, match="CLIConfig"):
             collect_mapped_values(ctx, sel, verbose_errors=False)

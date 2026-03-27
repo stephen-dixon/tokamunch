@@ -8,6 +8,12 @@ This is mostly vibes and slop for now.
 
 ---
 
+## Documentation
+
+Hosted [here](https://stephen-dixon.github.io/tokamunch/)
+
+---
+
 ## Installation
 
 ```bash

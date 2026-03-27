@@ -1,6 +1,7 @@
 from tokamunch import IDSHelper
 from tokamunch.selection import (
     IdsSelection,
+    MultiPathSelection,
     SinglePathSelection,
     _included,
     generate_selected_paths,
@@ -140,6 +141,40 @@ class TestGenerateSelectedPathsIdsSelection:
         paths = list(generate_selected_paths(sel, ctx))
         assert "magnetics/flux_loop[0]/field" in paths
         assert "magnetics/flux_loop[0]" not in paths
+
+
+class TestGenerateSelectedPathsMultiPathSelection:
+    def _make_ctx(self) -> FakeCtx:
+        return FakeCtx([], {})
+
+    def test_yields_all_paths(self) -> None:
+        ctx = self._make_ctx()
+        paths = ["magnetics/flux_loop[0]/field", "magnetics/flux_loop[1]/field"]
+        sel = MultiPathSelection(paths=paths)
+        assert list(generate_selected_paths(sel, ctx)) == paths
+
+    def test_filtered_by_mapping_keys(self) -> None:
+        ctx = self._make_ctx()
+        keys = frozenset({"magnetics/flux_loop[#]/field"})
+        sel = MultiPathSelection(
+            paths=[
+                "magnetics/flux_loop[0]/field",
+                "magnetics/other[0]/field",
+            ],
+            mapping_keys=keys,
+        )
+        assert list(generate_selected_paths(sel, ctx)) == ["magnetics/flux_loop[0]/field"]
+
+    def test_empty_paths_yields_nothing(self) -> None:
+        ctx = self._make_ctx()
+        sel = MultiPathSelection(paths=[])
+        assert list(generate_selected_paths(sel, ctx)) == []
+
+    def test_order_preserved(self) -> None:
+        ctx = self._make_ctx()
+        paths = ["magnetics/time", "magnetics/flux_loop[0]/r", "magnetics/flux_loop[1]/r"]
+        sel = MultiPathSelection(paths=paths)
+        assert list(generate_selected_paths(sel, ctx)) == paths
 
 
 class TestGenerateSelectedPathsSinglePathSelection:

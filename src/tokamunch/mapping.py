@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, TypeAlias
+
+logger = logging.getLogger(__name__)
 
 from .config import CLIConfig, ConcurrencyMode
 from .context import MappingContext
@@ -201,9 +204,13 @@ def collect_mapped_values(
 ) -> tuple[list[MappingRecord], MappingSummary]:
     # Phase 1: expand all concrete paths (includes remote array-length queries).
     paths = list(generate_selected_paths(selection, ctx))
+    logger.info("Mapping %d paths", len(paths))
 
     # Phase 2: map each path, dispatching to the configured concurrency backend.
     concurrency = ctx.concurrency
+    logger.debug(
+        "Concurrency: mode=%s workers=%d", concurrency.mode.value, concurrency.workers
+    )
     if concurrency.mode == ConcurrencyMode.SERIAL or concurrency.workers <= 1:
         raw = _map_serial(ctx.tokamap, paths)
     elif concurrency.mode == ConcurrencyMode.THREAD:

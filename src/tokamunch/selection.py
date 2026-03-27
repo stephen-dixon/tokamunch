@@ -27,8 +27,16 @@ class SinglePathSelection:
     mapping_keys: frozenset[str] | None = field(default=None)
 
 
+@dataclass
+class MultiPathSelection:
+    """Map an explicit list of concrete paths."""
+
+    paths: list[str]
+    mapping_keys: frozenset[str] | None = field(default=None)
+
+
 # Public type alias — callers use this for annotations.
-Selection: TypeAlias = IdsSelection | SinglePathSelection
+Selection: TypeAlias = IdsSelection | SinglePathSelection | MultiPathSelection
 
 
 def path_matches(ids_path: str, pattern: str | None) -> bool:
@@ -50,6 +58,12 @@ def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterat
     if isinstance(selection, SinglePathSelection):
         if _included(selection.path, match=None, mapping_keys=selection.mapping_keys):
             yield selection.path
+        return
+
+    if isinstance(selection, MultiPathSelection):
+        for path in selection.paths:
+            if _included(path, match=None, mapping_keys=selection.mapping_keys):
+                yield path
         return
 
     helper = ctx.ids_helper(selection.ids)

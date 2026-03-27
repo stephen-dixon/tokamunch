@@ -31,7 +31,7 @@ from .parsing import (
 )
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .plugin_api import DataSource, DataSourceFactory, MapperProtocol
-from .selection import IdsSelection, Selection, SinglePathSelection
+from .selection import IdsSelection, MultiPathSelection, Selection, SinglePathSelection
 from .templates import load_mapping_keys
 from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .types import ExpansionContext, IDSNode, NodeType, TrieNode, WriteContext
@@ -48,6 +48,7 @@ __all__ = [
     "IDSHelper",
     "IDSNode",
     "IdsSelection",
+    "MultiPathSelection",
     "MapperConfig",
     "MappingContext",
     "NodeType",

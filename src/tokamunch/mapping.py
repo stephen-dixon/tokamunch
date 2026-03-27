@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, TypeAlias
@@ -54,6 +56,7 @@ class MappingSummary:
     returned_none: int = 0
     suppressed_errors: int = 0
     unexpected_errors: int = 0
+    elapsed_s: float = 0.0
 
     @property
     def has_unexpected_errors(self) -> bool:
@@ -99,13 +102,22 @@ _RawResult: TypeAlias = tuple[str, Any, Exception | None]
 # ── execution strategies ──────────────────────────────────────────────────────
 
 
-def _map_serial(tokamap: TokamapInterface, paths: list[str]) -> list[_RawResult]:
+_ProgressCallback: TypeAlias = Callable[[int], None]
+
+
+def _map_serial(
+    tokamap: TokamapInterface,
+    paths: list[str],
+    progress_callback: _ProgressCallback | None = None,
+) -> list[_RawResult]:
     results: list[_RawResult] = []
     for path in paths:
         try:
             results.append((path, normalise_map_result(tokamap.map(path)), None))
         except Exception as exc:
             results.append((path, None, exc))
+        if progress_callback is not None:
+            progress_callback(1)
     return results
 
 
@@ -114,7 +126,10 @@ def _thread_map_one(tokamap: TokamapInterface, path: str) -> Any:
 
 
 def _map_threaded(
-    tokamap: TokamapInterface, paths: list[str], workers: int
+    tokamap: TokamapInterface,
+    paths: list[str],
+    workers: int,
+    progress_callback: _ProgressCallback | None = None,
 ) -> list[_RawResult]:
     """Map paths concurrently using threads. Requires all plugins to be thread-safe."""
     results: list[_RawResult] = []
@@ -126,6 +141,8 @@ def _map_threaded(
                 results.append((path, future.result(), None))
             except Exception as exc:
                 results.append((path, None, exc))
+            if progress_callback is not None:
+                progress_callback(1)
     return results
 
 
@@ -135,6 +152,7 @@ def _map_multiprocess(
     shot: int | None,
     paths: list[str],
     workers: int,
+    progress_callback: _ProgressCallback | None = None,
 ) -> list[_RawResult]:
     """Map paths concurrently using processes. Each worker builds its own mapper."""
     results: list[_RawResult] = []
@@ -154,6 +172,8 @@ def _map_multiprocess(
                     results.append((_path, value, None))
             except Exception as exc:
                 results.append((path, None, exc))
+            if progress_callback is not None:
+                progress_callback(1)
     return results
 
 
@@ -180,8 +200,12 @@ def _build_records(
             suppressed = not verbose_errors and should_suppress_mapping_error(exc)
             if suppressed:
                 summary.suppressed_errors += 1
+                # Log at DEBUG so a file sink or --log-level DEBUG exposes the
+                # full error message even when it is suppressed in text output.
+                logger.debug("Suppressed mapping error at %s: %s", ids_path, exc)
             else:
                 summary.unexpected_errors += 1
+                logger.warning("Mapping error at %s: %s", ids_path, exc)
             records.append(
                 MappingRecord(ids_path=ids_path, error=exc, suppressed=suppressed)
             )
@@ -201,10 +225,16 @@ def collect_mapped_values(
     selection: Selection,
     *,
     verbose_errors: bool,
+    progress_callback: _ProgressCallback | None = None,
+    on_paths_ready: Callable[[int], None] | None = None,
 ) -> tuple[list[MappingRecord], MappingSummary]:
+    t0 = time.perf_counter()
+
     # Phase 1: expand all concrete paths (includes remote array-length queries).
     paths = list(generate_selected_paths(selection, ctx))
     logger.info("Mapping %d paths", len(paths))
+    if on_paths_ready is not None:
+        on_paths_ready(len(paths))
 
     # Phase 2: map each path, dispatching to the configured concurrency backend.
     concurrency = ctx.concurrency
@@ -212,9 +242,9 @@ def collect_mapped_values(
         "Concurrency: mode=%s workers=%d", concurrency.mode.value, concurrency.workers
     )
     if concurrency.mode == ConcurrencyMode.SERIAL or concurrency.workers <= 1:
-        raw = _map_serial(ctx.tokamap, paths)
+        raw = _map_serial(ctx.tokamap, paths, progress_callback)
     elif concurrency.mode == ConcurrencyMode.THREAD:
-        raw = _map_threaded(ctx.tokamap, paths, concurrency.workers)
+        raw = _map_threaded(ctx.tokamap, paths, concurrency.workers, progress_callback)
     elif concurrency.mode == ConcurrencyMode.PROCESS:
         if ctx.cli_config is None:
             raise RuntimeError(
@@ -222,9 +252,12 @@ def collect_mapped_values(
                 "Use MappingContext.from_config() or set cli_config explicitly."
             )
         raw = _map_multiprocess(
-            ctx.cli_config, ctx.device, ctx.shot, paths, concurrency.workers
+            ctx.cli_config, ctx.device, ctx.shot, paths, concurrency.workers,
+            progress_callback,
         )
     else:
         raise ValueError(f"Unknown concurrency mode: {concurrency.mode!r}")
 
-    return _build_records(raw, verbose_errors=verbose_errors)
+    records, summary = _build_records(raw, verbose_errors=verbose_errors)
+    summary.elapsed_s = time.perf_counter() - t0
+    return records, summary

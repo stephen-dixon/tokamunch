@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .plugin_api import MapperProtocol
+
+logger = logging.getLogger(__name__)
 
 # Prefix of the "no mapping defined" exception that libtokamap raises.
 # Shared with mapping.py for consistent error classification.
@@ -36,7 +39,25 @@ class TokamapInterface:
             res = self.map(ids_path)
             if res is None:
                 return 0
-            return int(_decode_s1_bytes(res))
+            scalar = _decode_s1_bytes(res)
+            try:
+                if hasattr(scalar, "item"):
+                    scalar = scalar.item()
+                return int(scalar)
+            except (ValueError, TypeError) as cast_exc:
+                dtype = getattr(scalar, "dtype", type(scalar).__name__)
+                shape = getattr(scalar, "shape", None)
+                logger.debug(
+                    "Array-length cast failed for %r: %s. "
+                    "type=%s dtype=%s shape=%s value=%r",
+                    ids_path,
+                    cast_exc,
+                    type(scalar).__name__,
+                    dtype,
+                    shape,
+                    scalar,
+                )
+                raise
         except Exception as exc:
             if str(exc).startswith(_MISSING_MAPPING_PREFIX):
                 return 0

@@ -25,6 +25,7 @@ dependencies = [
     "libtokamap",
     "imas_data_dictionary",
     "imas-python[netcdf]",
+    "tqdm",
     # "numpy",
     # "pyuda" # temporarily for testing...
 ]

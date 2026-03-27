@@ -26,6 +26,19 @@ def expand_ids_path_trie_segments(
                 built.pop()
                 continue
 
+            # A terminal ARRAY_STRUCT node (trie leaf with no children) represents
+            # an array-valued field such as `data(:)` — the (:) denotes the shape of
+            # stored data, not an array-of-structs dimension.  Treat it as a simple
+            # leaf: no length query, no index.
+            if is_leaf_node(child):
+                simple_node = IDSNode(
+                    name=ids_node.name, node_type=NodeType.SIMPLE_NODE, index=None
+                )
+                built.append(simple_node)
+                yield tuple(built)
+                built.pop()
+                continue
+
             query_node = IDSNode(
                 name=ids_node.name, node_type=NodeType.ARRAY_STRUCT, index=None
             )

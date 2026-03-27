@@ -21,6 +21,7 @@ from .ids_writer import (
 from .imas_dd import generate_ids_paths
 from .mapper import create_mapper_from_config
 from .parsing import (
+    concrete_path_to_schema_path,
     concrete_path_to_template,
     normalise_schema_segment,
     parse_concrete_path,
@@ -59,6 +60,7 @@ __all__ = [
     "TrieNode",
     "WriteContext",
     "build_ids_path_trie",
+    "concrete_path_to_schema_path",
     "concrete_path_to_template",
     "create_mapper_from_config",
     "ensure_ids_arrays_resized",

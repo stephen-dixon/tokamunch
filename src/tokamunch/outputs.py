@@ -51,9 +51,33 @@ def print_summary(summary: MappingSummary) -> None:
     print(
         f"Summary: scanned {summary.total_paths} paths; mapped {summary.mapped}; "
         f"returned None {summary.returned_none}; suppressed {summary.suppressed_errors}; "
-        f"unexpected errors {summary.unexpected_errors}.",
+        f"unexpected errors {summary.unexpected_errors}; "
+        f"elapsed {summary.elapsed_s:.2f}s.",
         file=sys.stderr,
     )
+
+
+def build_schema_map(concrete_paths: list[str]) -> dict[str, list[str]]:
+    """Group concrete paths by their schema path.
+
+    Returns an ordered dict mapping each distinct schema path (in ``(:)``
+    notation) to the list of concrete paths that expand from it.
+    """
+    from .parsing import concrete_path_to_schema_path
+
+    result: dict[str, list[str]] = {}
+    for p in concrete_paths:
+        schema = concrete_path_to_schema_path(p)
+        result.setdefault(schema, []).append(p)
+    return result
+
+
+def render_text_schema_map(schema_map: dict[str, list[str]]) -> str:
+    lines: list[str] = []
+    for schema_path, concrete_paths in schema_map.items():
+        for cp in concrete_paths:
+            lines.append(f"{schema_path} -> {cp}")
+    return "\n".join(lines)
 
 
 def write_json_file(path: Path, data: Any, *, force: bool) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
 
 from .checks import check_ids
@@ -11,8 +12,10 @@ from .context import MappingContext
 from .mapping import collect_mapped_values
 from .outputs import (
     build_json_results,
+    build_schema_map,
     print_summary,
     render_text_records,
+    render_text_schema_map,
     write_json_file,
 )
 from .selection import IdsSelection, MultiPathSelection, SinglePathSelection, path_matches
@@ -83,26 +86,72 @@ def _resolve_paths_arg(values: list[str]) -> list[str]:
 
 
 def cmd_paths(args: argparse.Namespace) -> int:
+    import tqdm as tqdm_mod
+
+    if args.output is not None:
+        output_path = Path(args.output)
+        if output_path.suffix.lower() != ".json":
+            raise ValueError(
+                f"Unsupported output file extension for {output_path!s}. Use .json."
+            )
+
     ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
     _apply_log_level(args.log_level, ctx.cli_config)
     logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
     helper = ctx.ids_helper(args.ids)
 
-    lines: list[str] = []
-    for path in helper.generate_concrete_paths(
-        ctx.tokamap.get_array_length,
-        leaves_only=args.leaves_only,
-    ):
-        if path_matches(path, args.match):
-            lines.append(path)
+    # Use the number of schema leaf paths as an approximate total for the progress
+    # bar. Concrete paths may exceed this when array structs expand to multiple
+    # elements, so the percentage can exceed 100 % — this is expected.
+    schema_leaf_count = sum(1 for _ in helper.generate_non_concrete_paths(leaves_only=True))
 
-    logger.info("Found %d concrete paths for IDS '%s'", len(lines), args.ids)
-    if lines:
-        print("\n".join(lines))
+    t0 = time.perf_counter()
+    concrete_paths: list[str] = []
+    disable_bar = not sys.stderr.isatty()
+    with tqdm_mod.tqdm(
+        total=schema_leaf_count,
+        desc="Expanding",
+        unit="path",
+        disable=disable_bar,
+        file=sys.stderr,
+    ) as bar:
+        for path in helper.generate_concrete_paths(
+            ctx.tokamap.get_array_length,
+            leaves_only=args.leaves_only,
+        ):
+            bar.update(1)
+            if path_matches(path, args.match):
+                concrete_paths.append(path)
+
+    elapsed = time.perf_counter() - t0
+    logger.info("Found %d concrete paths for IDS '%s'", len(concrete_paths), args.ids)
+    print(
+        f"Paths: {len(concrete_paths)} concrete paths in {elapsed:.2f}s.",
+        file=sys.stderr,
+    )
+
+    if args.schema_map:
+        schema_map = build_schema_map(concrete_paths)
+        if args.output is not None:
+            write_json_file(Path(args.output), schema_map, force=args.force)
+            print(f"Wrote schema map to {args.output}")
+        else:
+            text = render_text_schema_map(schema_map)
+            if text:
+                print(text)
+    else:
+        if args.output is not None:
+            write_json_file(Path(args.output), concrete_paths, force=args.force)
+            print(f"Wrote paths to {args.output}")
+        elif concrete_paths:
+            print("\n".join(concrete_paths))
+
     return 0
 
 
 def cmd_map(args: argparse.Namespace) -> int:
+    import tqdm as tqdm_mod
+
     if args.output is not None:
         output_path = Path(args.output)
         if output_path.suffix.lower() not in {".json", *SUPPORTED_SUFFIXES}:
@@ -134,11 +183,33 @@ def cmd_map(args: argparse.Namespace) -> int:
             mapping_keys=mapping_keys,
         )
 
-    records, summary = collect_mapped_values(
-        ctx,
-        selection,
-        verbose_errors=args.verbose_errors,
-    )
+    # The bar is created with total=None (indeterminate) during path expansion,
+    # then switched to the exact count once phase 1 completes and mapping begins.
+    disable_bar = not sys.stderr.isatty()
+    with tqdm_mod.tqdm(
+        total=None,
+        desc="Expanding paths",
+        unit="path",
+        disable=disable_bar,
+        file=sys.stderr,
+    ) as bar:
+
+        def _on_path_expanded(n: int) -> None:
+            # Called by collect_mapped_values once it knows the full path list,
+            # before mapping starts: set the exact total and switch description.
+            bar.reset(total=n)
+            bar.set_description("Mapping")
+
+        def _on_path_mapped(n: int) -> None:
+            bar.update(n)
+
+        records, summary = collect_mapped_values(
+            ctx,
+            selection,
+            verbose_errors=args.verbose_errors,
+            on_paths_ready=_on_path_expanded,
+            progress_callback=_on_path_mapped,
+        )
     logger.info(
         "Results: mapped=%d none=%d suppressed=%d errors=%d",
         summary.mapped,
@@ -293,6 +364,18 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging verbosity; overrides log_level in config (default: WARNING)",
     )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        metavar="FILE",
+        help="Write log output to FILE in addition to (or instead of) the console",
+    )
+    parser.add_argument(
+        "--log-file-level",
+        default="DEBUG",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Verbosity for the file log sink (default: DEBUG)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -310,6 +393,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="IDS name to expand, e.g. 'magnetics'",
     )
     add_match_argument(parser_paths)
+    parser_paths.add_argument(
+        "--schema-map",
+        action="store_true",
+        help=(
+            "Show each schema path ((:) notation) alongside the concrete path(s) "
+            "it expands to. Console: 'schema -> concrete' lines. "
+            "JSON: {schema_path: [concrete_path, ...]}."
+        ),
+    )
+    parser_paths.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Write output to a JSON file instead of printing to the console",
+    )
+    add_force_argument(parser_paths)
     parser_paths.set_defaults(func=cmd_paths)
 
     parser_map = subparsers.add_parser(
@@ -411,6 +511,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_file_log_handler(path: str, level: str) -> None:
+    """Attach a file handler to the root logger.
+
+    The file handler uses a timestamped format so log entries can be
+    correlated with wall-clock time when inspecting errors offline.
+    The root logger level is lowered to ``level`` if it is currently
+    more restrictive, ensuring the new handler actually receives records.
+    """
+    handler = logging.FileHandler(path, encoding="utf-8")
+    handler.setLevel(level)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    root = logging.getLogger()
+    root.addHandler(handler)
+    # The root logger acts as a gate: if its level is higher than the handler's
+    # level, records are discarded before reaching the handler.
+    if root.level > handler.level:
+        root.setLevel(handler.level)
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -418,6 +539,9 @@ def main() -> None:
     logging.basicConfig(format="%(levelname)s %(name)s: %(message)s", level=logging.WARNING)
     if args.log_level is not None:
         logging.getLogger().setLevel(args.log_level)
+
+    if args.log_file is not None:
+        _add_file_log_handler(args.log_file, args.log_file_level)
 
     try:
         raise SystemExit(args.func(args))

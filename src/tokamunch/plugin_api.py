@@ -3,6 +3,16 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 
+class MapperProtocol(Protocol):
+    """Protocol for the underlying mapper object (e.g. ``libtokamap.Mapper``).
+
+    Typing ``TokamapInterface.mapper`` against this protocol allows tests and
+    library users to supply a lightweight fake without installing libtokamap.
+    """
+
+    def map(self, device: str, ids_path: str, args: dict[str, Any]) -> Any: ...
+
+
 class DataSource(Protocol):
     """
     Protocol for data source objects registered with the mapper.

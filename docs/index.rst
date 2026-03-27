@@ -14,3 +14,9 @@ files, and validating configuration.
    path-syntax
    checks
    development
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Library reference
+
+   api

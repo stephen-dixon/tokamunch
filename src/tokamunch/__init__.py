@@ -30,7 +30,7 @@ from .parsing import (
     render_schema_path,
 )
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
-from .plugin_api import DataSource, DataSourceFactory
+from .plugin_api import DataSource, DataSourceFactory, MapperProtocol
 from .selection import IdsSelection, Selection, SinglePathSelection
 from .templates import load_mapping_keys
 from .trie import build_ids_path_trie, generate_schema_paths_from_trie
@@ -43,6 +43,7 @@ __all__ = [
     "DataSource",
     "DataSourceConfig",
     "DataSourceFactory",
+    "MapperProtocol",
     "ExpansionContext",
     "IDSHelper",
     "IDSNode",

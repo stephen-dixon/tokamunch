@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .plugin_api import MapperProtocol
+
 # Prefix of the "no mapping defined" exception that libtokamap raises.
 # Shared with mapping.py for consistent error classification.
 _MISSING_MAPPING_PREFIX = "Mapping error: failed to find mapping for"
@@ -17,7 +19,7 @@ def _decode_s1_bytes(value: Any) -> Any:
 class TokamapInterface:
     def __init__(
         self,
-        mapper: Any,
+        mapper: MapperProtocol,
         device: str,
         *,
         shot: int | None = None,

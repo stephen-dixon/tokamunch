@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
-from collections.abc import Iterable
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TypeAlias
 
@@ -46,7 +46,7 @@ def _included(
     )
 
 
-def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterable[str]:
+def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterator[str]:
     if isinstance(selection, SinglePathSelection):
         if _included(selection.path, match=None, mapping_keys=selection.mapping_keys):
             yield selection.path

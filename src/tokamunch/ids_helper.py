@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
+from functools import cache
 
 from .imas_dd import generate_ids_paths
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .types import ExpansionContext, IDSNode, TrieNode
+
+
+@cache
+def _build_cached_trie(ids_name: str) -> TrieNode:
+    """Build and cache the schema trie for an IDS name.
+
+    Cached alongside ``_load_ids_fields`` so repeated ``IDSHelper.from_ids_name``
+    calls for the same IDS name skip both the IDS field fetch and the trie build.
+    """
+    return build_ids_path_trie(generate_ids_paths(ids_name))
 
 
 class IDSHelper:
@@ -15,7 +26,10 @@ class IDSHelper:
 
     @classmethod
     def from_ids_name(cls, ids_name: str) -> IDSHelper:
-        return cls(generate_ids_paths(ids_name))
+        inst = cls.__new__(cls)
+        inst._trie = _build_cached_trie(ids_name)
+        inst._expansion_context = ExpansionContext()
+        return inst
 
     @property
     def trie(self) -> TrieNode:

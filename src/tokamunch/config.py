@@ -93,7 +93,7 @@ def load_cli_config(path: str | Path) -> CLIConfig:
 
     concurrency_raw = run_raw.get("concurrency", {})
     concurrency = ConcurrencyConfig(
-        mode=ConcurrencyMode(concurrency_raw.get("mode", ConcurrencyMode.SERIAL)),
+        mode=ConcurrencyMode(concurrency_raw.get("mode", "serial")),
         workers=int(concurrency_raw.get("workers", 1)),
     )
 

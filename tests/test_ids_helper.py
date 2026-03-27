@@ -1,4 +1,5 @@
 from tokamunch import IDSHelper
+from tokamunch.ids_helper import _build_cached_trie
 
 
 def _make_helper(*schema_paths: str) -> IDSHelper:
@@ -79,6 +80,21 @@ class TestGenerateConcretePaths:
         assert all("/field" in p for p in paths)
         assert "magnetics/flux_loop[0]" not in paths
         assert "magnetics/flux_loop[1]" not in paths
+
+    def test_from_ids_name_shares_cached_trie(self) -> None:
+        # Two IDSHelper instances for the same IDS name must share the same
+        # underlying trie object so the trie is only built once.
+        helper1 = IDSHelper.from_ids_name("magnetics")
+        helper2 = IDSHelper.from_ids_name("magnetics")
+        assert helper1._trie is helper2._trie
+        # Expansion contexts must be independent so cached array lengths do not bleed across.
+        assert helper1._expansion_context is not helper2._expansion_context
+
+    def test_from_ids_name_trie_matches_module_cache(self) -> None:
+        # The trie returned by from_ids_name must be the same object held by
+        # _build_cached_trie, confirming the factory method uses the cache.
+        helper = IDSHelper.from_ids_name("magnetics")
+        assert helper._trie is _build_cached_trie("magnetics")
 
     def test_array_sizes_cached_after_expansion(self) -> None:
         helper = _make_helper(

@@ -68,6 +68,8 @@ Configuration
 
 .. autofunction:: tokamunch.load_cli_config
 
+.. autofunction:: tokamunch.config.apply_config_overrides
+
 Path utilities
 --------------
 
@@ -115,6 +117,41 @@ Functions for moving data between munchi JSON output, imas-python IMAS files
 .. autofunction:: tokamunch.read_ids_records
 .. autofunction:: tokamunch.read_imas_records
 .. autofunction:: tokamunch.convert_file
+
+Diff and comparison
+-------------------
+
+.. autofunction:: tokamunch.diff.diff_records
+.. autofunction:: tokamunch.diff.diff_files
+.. autofunction:: tokamunch.diff.render_diff
+
+.. autoclass:: tokamunch.diff.DiffEntry
+   :members:
+
+Checkpointing
+-------------
+
+.. autoclass:: tokamunch.checkpoint.Checkpoint
+   :members:
+
+.. autofunction:: tokamunch.checkpoint.save_checkpoint
+.. autofunction:: tokamunch.checkpoint.load_checkpoint
+.. autofunction:: tokamunch.checkpoint.apply_checkpoint
+
+Shell completions
+-----------------
+
+.. autofunction:: tokamunch.completions.generate_bash_completion
+.. autofunction:: tokamunch.completions.generate_zsh_completion
+.. autofunction:: tokamunch.completions.generate_fish_completion
+.. autofunction:: tokamunch.completions.get_ids_names
+
+Mapping annotations
+-------------------
+
+.. autofunction:: tokamunch.templates.is_comment_stub
+.. autofunction:: tokamunch.templates.merge_mapping_stubs
+.. autofunction:: tokamunch.templates.build_blank_mapping_template
 
 Profiling
 ---------

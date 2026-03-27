@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 
 from tokamunch.config import (
+    CLIConfig,
+    ConcurrencyConfig,
     ConcurrencyMode,
+    MapperConfig,
+    RunConfig,
+    apply_config_overrides,
     load_cli_config,
 )
 
@@ -293,3 +298,160 @@ enabled = false
         )
         cfg = load_cli_config(munchi_cfg)
         assert cfg.data_sources[0].enabled is False
+
+
+# ── apply_config_overrides ────────────────────────────────────────────────────
+
+
+def _base_cfg() -> CLIConfig:
+    """Minimal valid CLIConfig for override tests (no file I/O needed)."""
+    return CLIConfig(
+        mapper=MapperConfig(
+            device="mast",
+            config_params={"mapping_directory": "/m", "schemas_directory": "/s"},
+        ),
+        run=RunConfig(),
+        data_sources=[],
+    )
+
+
+class TestApplyConfigOverrides:
+    def test_empty_overrides_returns_equivalent_config(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, [])
+        assert result.mapper.device == cfg.mapper.device
+        assert result.run.log_level == cfg.run.log_level
+
+    def test_override_mapper_device(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["mapper.device=jet"])
+        assert result.mapper.device == "jet"
+
+    def test_override_run_concurrency_mode_thread(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.concurrency.mode=thread"])
+        assert result.run.concurrency.mode == ConcurrencyMode.THREAD
+
+    def test_override_run_concurrency_mode_process(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.concurrency.mode=process"])
+        assert result.run.concurrency.mode == ConcurrencyMode.PROCESS
+
+    def test_override_run_concurrency_workers(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.concurrency.workers=8"])
+        assert result.run.concurrency.workers == 8
+
+    def test_override_run_log_level(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.log_level=DEBUG"])
+        assert result.run.log_level == "DEBUG"
+
+    def test_override_run_log_level_case_insensitive(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.log_level=info"])
+        assert result.run.log_level == "INFO"
+
+    def test_override_run_binary_arrays_true(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.binary_arrays=true"])
+        assert result.run.binary_arrays is True
+
+    def test_override_run_binary_arrays_false(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.binary_arrays=false"])
+        assert result.run.binary_arrays is False
+
+    def test_override_run_binary_arrays_numeric(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.binary_arrays=1"])
+        assert result.run.binary_arrays is True
+
+    def test_override_run_on_imas_error_raise(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.on_imas_error=raise"])
+        assert result.run.on_imas_error == "raise"
+
+    def test_override_run_on_imas_error_fallback_json(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.on_imas_error=fallback-json"])
+        assert result.run.on_imas_error == "fallback-json"
+
+    def test_override_run_default_shot(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(cfg, ["run.default_shot=47125"])
+        assert result.run.default_shot == 47125
+
+    def test_multiple_overrides_combined(self) -> None:
+        cfg = _base_cfg()
+        result = apply_config_overrides(
+            cfg,
+            [
+                "mapper.device=iter",
+                "run.concurrency.mode=process",
+                "run.concurrency.workers=4",
+                "run.log_level=DEBUG",
+            ],
+        )
+        assert result.mapper.device == "iter"
+        assert result.run.concurrency.mode == ConcurrencyMode.PROCESS
+        assert result.run.concurrency.workers == 4
+        assert result.run.log_level == "DEBUG"
+
+    def test_original_config_not_mutated(self) -> None:
+        cfg = _base_cfg()
+        apply_config_overrides(cfg, ["mapper.device=iter"])
+        assert cfg.mapper.device == "mast"
+
+    def test_data_sources_preserved(self) -> None:
+        from tokamunch.config import DataSourceConfig
+
+        cfg = _base_cfg()
+        cfg = CLIConfig(
+            mapper=cfg.mapper,
+            run=cfg.run,
+            data_sources=[DataSourceConfig(mapper_name="pyuda", plugin="pyuda")],
+        )
+        result = apply_config_overrides(cfg, ["mapper.device=iter"])
+        assert len(result.data_sources) == 1
+        assert result.data_sources[0].mapper_name == "pyuda"
+
+    def test_invalid_key_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="Unknown config override key"):
+            apply_config_overrides(cfg, ["run.unknown_key=foo"])
+
+    def test_missing_equals_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="KEY=VALUE"):
+            apply_config_overrides(cfg, ["run.log_level"])
+
+    def test_invalid_concurrency_mode_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="run.concurrency.mode"):
+            apply_config_overrides(cfg, ["run.concurrency.mode=parallel"])
+
+    def test_invalid_concurrency_workers_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="run.concurrency.workers"):
+            apply_config_overrides(cfg, ["run.concurrency.workers=many"])
+
+    def test_invalid_log_level_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="run.log_level"):
+            apply_config_overrides(cfg, ["run.log_level=VERBOSE"])
+
+    def test_invalid_binary_arrays_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="true/false"):
+            apply_config_overrides(cfg, ["run.binary_arrays=yes"])
+
+    def test_invalid_on_imas_error_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="run.on_imas_error"):
+            apply_config_overrides(cfg, ["run.on_imas_error=ignore"])
+
+    def test_invalid_default_shot_raises(self) -> None:
+        cfg = _base_cfg()
+        with pytest.raises(ValueError, match="run.default_shot"):
+            apply_config_overrides(cfg, ["run.default_shot=abc"])

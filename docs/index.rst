@@ -11,8 +11,10 @@ files, and validating configuration.
    cli
    config
    mapping-files
+   mapping-annotations
    path-syntax
    conversion
+   diff
    profiling
    checks
    development

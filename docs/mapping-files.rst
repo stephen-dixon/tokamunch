@@ -8,13 +8,14 @@ Generate a mapping template from IDS schema paths:
    munchi init-mapping --ids magnetics --leaves-only
 
 The generated JSON maps each template path to an **annotation stub** — a dict
-with a ``"comment"`` key ready for you to fill in:
+with a ``"comment"`` key pre-populated from the IDS data dictionary:
 
 .. code-block:: json
 
    {
-     "magnetics/flux_loop[#]/field": {"comment": ""},
-     "magnetics/b_field_pol_probe[#]/field": {"comment": ""}
+     "magnetics/flux_loop[#]/flux/data[#]": {"comment": "Flux [Wb]"},
+     "magnetics/flux_loop[#]/position[#]/r": {"comment": "Major radius [m]"},
+     "magnetics/b_field_pol_probe[#]/field/data[#]": {"comment": "Data [T]"}
    }
 
 Keys use the **mapping-template path** format (see :doc:`path-syntax`): array

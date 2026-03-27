@@ -22,7 +22,7 @@ MIT License, see [license file](https://github.com/stephen-dixon/tokamunch/blob/
 
 ## Installation
 
-Available on [pypi](https://test.pypi.org/project/tokamunch/)
+Available on [pypi](https://pypi.org/project/tokamunch/)
 
 ```bash
 pip install tokamunch                   # core (JSON output only)

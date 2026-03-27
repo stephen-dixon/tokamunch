@@ -68,11 +68,14 @@ def _encode_ndarray_binary(arr: Any) -> dict[str, Any]:
 
 
 def make_json_safe(value: Any, *, binary_arrays: bool = False) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or isinstance(value, str | int | float | bool):
         return value
     if isinstance(value, dict):
-        return {str(k): make_json_safe(v, binary_arrays=binary_arrays) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+        return {
+            str(k): make_json_safe(v, binary_arrays=binary_arrays)
+            for k, v in value.items()
+        }
+    if isinstance(value, list | tuple):
         return [make_json_safe(v, binary_arrays=binary_arrays) for v in value]
     if binary_arrays and hasattr(value, "dtype") and hasattr(value, "tobytes"):
         return _encode_ndarray_binary(value)
@@ -94,7 +97,9 @@ def build_json_results(
     result: dict[str, Any] = {}
     for record in records:
         if record.ok and record.value is not None:
-            result[record.ids_path] = make_json_safe(record.value, binary_arrays=binary_arrays)
+            result[record.ids_path] = make_json_safe(
+                record.value, binary_arrays=binary_arrays
+            )
     return result
 
 

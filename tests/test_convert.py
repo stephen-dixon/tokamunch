@@ -1,4 +1,5 @@
 """Tests for tokamunch.convert — format conversion utilities."""
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,6 @@ from tokamunch.convert import (
     read_json_records,
 )
 from tokamunch.mapping import MappingRecord
-
 
 # ── minimal fake IDS objects ──────────────────────────────────────────────────
 
@@ -266,6 +266,7 @@ class TestRecordsToIdsObjects:
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
             from tokamunch.convert import records_to_ids_objects
+
             result = records_to_ids_objects(records)
 
         assert "magnetics" in result
@@ -285,6 +286,7 @@ class TestRecordsToIdsObjects:
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
             from tokamunch.convert import records_to_ids_objects
+
             result = records_to_ids_objects(records)
 
         assert set(result.keys()) == {"magnetics", "equilibrium"}
@@ -298,6 +300,7 @@ class TestRecordsToIdsObjects:
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
             from tokamunch.convert import records_to_ids_objects
+
             result = records_to_ids_objects(records)
 
         assert result == {}

@@ -1,11 +1,17 @@
 """Tests for tokamunch.checkpoint — save/load/apply checkpoint state."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-from tokamunch.checkpoint import Checkpoint, apply_checkpoint, load_checkpoint, save_checkpoint
+from tokamunch.checkpoint import (
+    Checkpoint,
+    apply_checkpoint,
+    load_checkpoint,
+    save_checkpoint,
+)
 from tokamunch.mapping import MappingRecord
 
 
@@ -14,7 +20,9 @@ class TestLoadSaveCheckpoint:
         assert load_checkpoint(tmp_path / "nonexistent.json") is None
 
     def test_save_creates_file(self, tmp_path: Path) -> None:
-        cp = Checkpoint(output_path="out.json", completed_paths=["a/b"], results={"a/b": 1.0})
+        cp = Checkpoint(
+            output_path="out.json", completed_paths=["a/b"], results={"a/b": 1.0}
+        )
         path = tmp_path / "cp.json"
         save_checkpoint(path, cp)
         assert path.exists()
@@ -44,7 +52,9 @@ class TestLoadSaveCheckpoint:
     def test_overwrites_existing_checkpoint(self, tmp_path: Path) -> None:
         path = tmp_path / "cp.json"
         save_checkpoint(path, Checkpoint(output_path="v1.json", completed_paths=["a"]))
-        save_checkpoint(path, Checkpoint(output_path="v2.json", completed_paths=["a", "b"]))
+        save_checkpoint(
+            path, Checkpoint(output_path="v2.json", completed_paths=["a", "b"])
+        )
         loaded = load_checkpoint(path)
         assert loaded is not None
         assert loaded.output_path == "v2.json"
@@ -81,7 +91,7 @@ class TestApplyCheckpoint:
             completed_paths=["c/d"],
             results={"c/d": 42},
         )
-        remaining, done = apply_checkpoint(paths, cp)
+        remaining, _done = apply_checkpoint(paths, cp)
         assert "c/d" not in remaining
         assert "a/b" in remaining
         assert "e/f" in remaining
@@ -100,7 +110,9 @@ class TestApplyCheckpoint:
 
     def test_done_records_are_mapping_records(self) -> None:
         paths = ["a/b"]
-        cp = Checkpoint(output_path="out.json", completed_paths=["a/b"], results={"a/b": 1})
+        cp = Checkpoint(
+            output_path="out.json", completed_paths=["a/b"], results={"a/b": 1}
+        )
         _, done = apply_checkpoint(paths, cp)
         assert all(isinstance(r, MappingRecord) for r in done)
 
@@ -117,6 +129,8 @@ class TestApplyCheckpoint:
 
     def test_order_of_remaining_preserved(self) -> None:
         paths = ["z/first", "a/second", "m/third"]
-        cp = Checkpoint(output_path="out.json", completed_paths=["a/second"], results={})
+        cp = Checkpoint(
+            output_path="out.json", completed_paths=["a/second"], results={}
+        )
         remaining, _ = apply_checkpoint(paths, cp)
         assert remaining == ["z/first", "m/third"]

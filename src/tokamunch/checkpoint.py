@@ -3,6 +3,7 @@
 Checkpoints allow interrupted mapping runs to be resumed from where they
 left off, avoiding re-querying paths that have already been mapped.
 """
+
 from __future__ import annotations
 
 import json

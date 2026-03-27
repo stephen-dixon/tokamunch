@@ -163,7 +163,9 @@ class TestGenerateSelectedPathsMultiPathSelection:
             ],
             mapping_keys=keys,
         )
-        assert list(generate_selected_paths(sel, ctx)) == ["magnetics/flux_loop[0]/field"]
+        assert list(generate_selected_paths(sel, ctx)) == [
+            "magnetics/flux_loop[0]/field"
+        ]
 
     def test_empty_paths_yields_nothing(self) -> None:
         ctx = self._make_ctx()
@@ -172,7 +174,11 @@ class TestGenerateSelectedPathsMultiPathSelection:
 
     def test_order_preserved(self) -> None:
         ctx = self._make_ctx()
-        paths = ["magnetics/time", "magnetics/flux_loop[0]/r", "magnetics/flux_loop[1]/r"]
+        paths = [
+            "magnetics/time",
+            "magnetics/flux_loop[0]/r",
+            "magnetics/flux_loop[1]/r",
+        ]
         sel = MultiPathSelection(paths=paths)
         assert list(generate_selected_paths(sel, ctx)) == paths
 

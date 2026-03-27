@@ -1,4 +1,5 @@
 """Tests for tokamunch.completions — shell completion generation."""
+
 from __future__ import annotations
 
 from tokamunch.completions import (

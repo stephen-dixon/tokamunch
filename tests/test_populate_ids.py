@@ -1,9 +1,9 @@
 """Tests for _populate_ids behaviour around array-struct vs leaf nodes."""
+
 from __future__ import annotations
 
 from tokamunch.mapping import MappingRecord
 from tokamunch.write_ids import _populate_ids
-
 
 # ── minimal fake IDS objects ──────────────────────────────────────────────────
 

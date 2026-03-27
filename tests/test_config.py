@@ -4,7 +4,6 @@ import pytest
 
 from tokamunch.config import (
     CLIConfig,
-    ConcurrencyConfig,
     ConcurrencyMode,
     MapperConfig,
     RunConfig,
@@ -87,6 +86,7 @@ cache = true
 """,
         )
         cfg = load_cli_config(munchi_cfg)
+        assert cfg.mapper.config_params is not None
         assert cfg.mapper.config_params["trace"] is False
         assert cfg.mapper.config_params["cache"] is True
 
@@ -428,17 +428,17 @@ class TestApplyConfigOverrides:
 
     def test_invalid_concurrency_mode_raises(self) -> None:
         cfg = _base_cfg()
-        with pytest.raises(ValueError, match="run.concurrency.mode"):
+        with pytest.raises(ValueError, match=r"run\.concurrency\.mode"):
             apply_config_overrides(cfg, ["run.concurrency.mode=parallel"])
 
     def test_invalid_concurrency_workers_raises(self) -> None:
         cfg = _base_cfg()
-        with pytest.raises(ValueError, match="run.concurrency.workers"):
+        with pytest.raises(ValueError, match=r"run\.concurrency\.workers"):
             apply_config_overrides(cfg, ["run.concurrency.workers=many"])
 
     def test_invalid_log_level_raises(self) -> None:
         cfg = _base_cfg()
-        with pytest.raises(ValueError, match="run.log_level"):
+        with pytest.raises(ValueError, match=r"run\.log_level"):
             apply_config_overrides(cfg, ["run.log_level=VERBOSE"])
 
     def test_invalid_binary_arrays_raises(self) -> None:
@@ -448,10 +448,10 @@ class TestApplyConfigOverrides:
 
     def test_invalid_on_imas_error_raises(self) -> None:
         cfg = _base_cfg()
-        with pytest.raises(ValueError, match="run.on_imas_error"):
+        with pytest.raises(ValueError, match=r"run\.on_imas_error"):
             apply_config_overrides(cfg, ["run.on_imas_error=ignore"])
 
     def test_invalid_default_shot_raises(self) -> None:
         cfg = _base_cfg()
-        with pytest.raises(ValueError, match="run.default_shot"):
+        with pytest.raises(ValueError, match=r"run\.default_shot"):
             apply_config_overrides(cfg, ["run.default_shot=abc"])

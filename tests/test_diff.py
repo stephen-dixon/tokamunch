@@ -1,11 +1,8 @@
 """Tests for tokamunch.diff — record comparison utilities."""
+
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import numpy as np
-import pytest
 
 from tokamunch.diff import DiffEntry, diff_records, render_diff
 from tokamunch.mapping import MappingRecord
@@ -102,15 +99,21 @@ class TestRenderDiff:
 
     def test_added_has_plus_prefix(self) -> None:
         out = render_diff(self._make_entries(), "A", "B")
-        assert any(line.startswith("+ ") and "a/added" in line for line in out.splitlines())
+        assert any(
+            line.startswith("+ ") and "a/added" in line for line in out.splitlines()
+        )
 
     def test_removed_has_minus_prefix(self) -> None:
         out = render_diff(self._make_entries(), "A", "B")
-        assert any(line.startswith("- ") and "b/removed" in line for line in out.splitlines())
+        assert any(
+            line.startswith("- ") and "b/removed" in line for line in out.splitlines()
+        )
 
     def test_changed_has_tilde_prefix(self) -> None:
         out = render_diff(self._make_entries(), "A", "B")
-        assert any(line.startswith("~ ") and "c/changed" in line for line in out.splitlines())
+        assert any(
+            line.startswith("~ ") and "c/changed" in line for line in out.splitlines()
+        )
 
     def test_unchanged_hidden_by_default(self) -> None:
         out = render_diff(self._make_entries(), "A", "B")
@@ -127,7 +130,7 @@ class TestRenderDiff:
 
     def test_summary_line_present(self) -> None:
         out = render_diff(self._make_entries(), "A", "B")
-        summary_line = [l for l in out.splitlines() if "Summary" in l]
+        summary_line = [ln for ln in out.splitlines() if "Summary" in ln]
         assert len(summary_line) == 1
         assert "added" in summary_line[0]
         assert "removed" in summary_line[0]

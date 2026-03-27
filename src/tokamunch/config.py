@@ -176,7 +176,6 @@ def apply_config_overrides(cfg: CLIConfig, overrides: list[str]) -> CLIConfig:
     ValueError
         For unknown keys or invalid values.
     """
-    from dataclasses import replace
 
     if not overrides:
         return cfg
@@ -214,19 +213,19 @@ def apply_config_overrides(cfg: CLIConfig, overrides: list[str]) -> CLIConfig:
         if key == "run.concurrency.mode":
             try:
                 conc_mode = ConcurrencyMode(raw_value)
-            except ValueError:
+            except ValueError as err:
                 valid = [m.value for m in ConcurrencyMode]
                 raise ValueError(
                     f"Invalid run.concurrency.mode {raw_value!r}. "
                     f"Must be one of: {', '.join(valid)}"
-                )
+                ) from err
         elif key == "run.concurrency.workers":
             try:
                 conc_workers = int(raw_value)
-            except ValueError:
+            except ValueError as err:
                 raise ValueError(
                     f"Invalid run.concurrency.workers {raw_value!r}: expected an integer"
-                )
+                ) from err
         elif key == "run.log_level":
             run_log_level = raw_value.upper()
             if run_log_level not in valid_log_levels:
@@ -246,10 +245,10 @@ def apply_config_overrides(cfg: CLIConfig, overrides: list[str]) -> CLIConfig:
         elif key == "run.default_shot":
             try:
                 run_default_shot = int(raw_value)
-            except ValueError:
+            except ValueError as err:
                 raise ValueError(
                     f"Invalid run.default_shot {raw_value!r}: expected an integer"
-                )
+                ) from err
         elif key == "mapper.device":
             mapper_device = raw_value
         else:

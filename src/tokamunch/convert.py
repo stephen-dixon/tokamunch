@@ -28,18 +28,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .ids_writer import ensure_ids_arrays_resized, resize_and_set_ids_value
 from .ids_helper import IDSHelper
 from .mapping import MappingRecord
-from .parsing import IDSNode, NodeType, parse_concrete_path
-from .types import WriteContext
+from .parsing import parse_concrete_path
+from .types import NodeType
 from .write_ids import (
+    SUPPORTED_SUFFIXES,
     IdsWriteError,
-    _derive_array_sizes,
     _group_records_by_ids,
     _imas_uri,
     _populate_ids,
-    SUPPORTED_SUFFIXES,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,7 +90,7 @@ def _is_empty_imas_value(value: Any) -> bool:
     if hasattr(value, "__len__"):
         return len(value) == 0
     if hasattr(value, "size"):
-        return value.size == 0
+        return bool(value.size == 0)
     return False
 
 
@@ -283,7 +281,7 @@ def convert_file(
         Per-IDS write errors (empty on full success).  Only relevant when the
         output format is IMAS.
     """
-    from .outputs import build_json_results, make_json_safe
+    from .outputs import build_json_results
     from .write_ids import write_imas_output
 
     in_suffix = input_path.suffix.lower()

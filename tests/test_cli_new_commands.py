@@ -1,12 +1,15 @@
 """Tests for new CLI subcommands and flags — argparse wiring only, no mapper."""
+
 from __future__ import annotations
+
+import argparse
 
 import pytest
 
 from tokamunch.cli import build_parser
 
 
-def _parse(*argv: str) -> object:
+def _parse(*argv: str) -> argparse.Namespace:
     return build_parser().parse_args(list(argv))
 
 
@@ -21,14 +24,27 @@ class TestUpdateMappingParser:
 
     def test_with_output_and_force(self) -> None:
         args = _parse(
-            "update-mapping", "--ids", "magnetics",
-            "--mapping", "m.json", "--output", "out.json", "--force",
+            "update-mapping",
+            "--ids",
+            "magnetics",
+            "--mapping",
+            "m.json",
+            "--output",
+            "out.json",
+            "--force",
         )
         assert args.output == "out.json"
         assert args.force is True
 
     def test_leaves_only(self) -> None:
-        args = _parse("update-mapping", "--ids", "magnetics", "--mapping", "m.json", "--leaves-only")
+        args = _parse(
+            "update-mapping",
+            "--ids",
+            "magnetics",
+            "--mapping",
+            "m.json",
+            "--leaves-only",
+        )
         assert args.leaves_only is True
 
 
@@ -63,19 +79,38 @@ class TestDiffParser:
 
 class TestUpdateParser:
     def test_basic(self) -> None:
-        args = _parse("update", "--input", "existing.json", "--output", "new.json", "--ids", "magnetics")
+        args = _parse(
+            "update",
+            "--input",
+            "existing.json",
+            "--output",
+            "new.json",
+            "--ids",
+            "magnetics",
+        )
         assert args.input == "existing.json"
         assert args.output == "new.json"
         assert args.ids == "magnetics"
 
     def test_mapping_optional(self) -> None:
-        args = _parse("update", "--input", "e.json", "--output", "n.json", "--ids", "magnetics")
+        args = _parse(
+            "update", "--input", "e.json", "--output", "n.json", "--ids", "magnetics"
+        )
         assert getattr(args, "mapping", None) is None or args.mapping is None
 
     def test_with_config_and_device(self) -> None:
         args = _parse(
-            "update", "--input", "e.json", "--output", "n.json",
-            "--ids", "magnetics", "--config", "munchi.toml", "--device", "jet",
+            "update",
+            "--input",
+            "e.json",
+            "--output",
+            "n.json",
+            "--ids",
+            "magnetics",
+            "--config",
+            "munchi.toml",
+            "--device",
+            "jet",
         )
         assert args.config == "munchi.toml"
         assert args.device == "jet"
@@ -107,14 +142,20 @@ class TestCompletionsParser:
 
 class TestMapNewFlags:
     def test_set_single(self) -> None:
-        args = _parse("map", "--ids", "magnetics", "--set", "run.concurrency.mode=thread")
+        args = _parse(
+            "map", "--ids", "magnetics", "--set", "run.concurrency.mode=thread"
+        )
         assert args.set == ["run.concurrency.mode=thread"]
 
     def test_set_multiple(self) -> None:
         args = _parse(
-            "map", "--ids", "magnetics",
-            "--set", "run.concurrency.mode=thread",
-            "--set", "run.concurrency.workers=4",
+            "map",
+            "--ids",
+            "magnetics",
+            "--set",
+            "run.concurrency.mode=thread",
+            "--set",
+            "run.concurrency.workers=4",
         )
         assert len(args.set) == 2
 
@@ -136,7 +177,16 @@ class TestMapNewFlags:
 
     def test_shots_and_shot_range_mutually_exclusive(self) -> None:
         with pytest.raises(SystemExit):
-            _parse("map", "--ids", "magnetics", "--shots", "47125", "--shot-range", "47125", "47130")
+            _parse(
+                "map",
+                "--ids",
+                "magnetics",
+                "--shots",
+                "47125",
+                "--shot-range",
+                "47125",
+                "47130",
+            )
 
     def test_checkpoint(self) -> None:
         args = _parse("map", "--ids", "magnetics", "--checkpoint", "cp.json")

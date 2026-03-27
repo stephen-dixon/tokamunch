@@ -1,4 +1,5 @@
 """Diff utilities for comparing two sets of tokamunch mapping records."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -36,7 +37,7 @@ def _values_equal(a: Any, b: Any) -> bool:
             return bool(np.array_equal(a, b))
     except ImportError:
         pass
-    return a == b
+    return bool(a == b)
 
 
 def diff_records(
@@ -68,17 +69,27 @@ def diff_records(
     for path in map_a:
         seen.add(path)
         if path not in map_b:
-            entries.append(DiffEntry(path=path, value_a=map_a[path], value_b=None, status="removed"))
+            entries.append(
+                DiffEntry(
+                    path=path, value_a=map_a[path], value_b=None, status="removed"
+                )
+            )
         else:
             try:
                 equal = _values_equal(map_a[path], map_b[path])
             except Exception:
                 equal = False
             status = "unchanged" if equal else "changed"
-            entries.append(DiffEntry(path=path, value_a=map_a[path], value_b=map_b[path], status=status))
+            entries.append(
+                DiffEntry(
+                    path=path, value_a=map_a[path], value_b=map_b[path], status=status
+                )
+            )
 
     for path in sorted(p for p in map_b if p not in seen):
-        entries.append(DiffEntry(path=path, value_a=None, value_b=map_b[path], status="added"))
+        entries.append(
+            DiffEntry(path=path, value_a=None, value_b=map_b[path], status="added")
+        )
 
     return entries
 
@@ -162,8 +173,7 @@ def diff_files(
                 )
             return read_imas_records(path, ids_names)
         raise ValueError(
-            f"Unsupported file format {suffix!r} for {path}. "
-            "Use .json, .h5, or .nc."
+            f"Unsupported file format {suffix!r} for {path}. Use .json, .h5, or .nc."
         )
 
     records_a = _read(path_a)

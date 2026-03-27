@@ -1,4 +1,5 @@
 """Profiling data structures and report rendering for tokamunch runs."""
+
 from __future__ import annotations
 
 import threading

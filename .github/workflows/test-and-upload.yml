@@ -31,8 +31,8 @@ jobs:
       - name: ruff check
         run: ruff check src tests
 
-      - name: ruff format
-        run: ruff format --check src tests
+      - name: black format
+        run: black --check src tests
 
       - name: mypy
         run: mypy src

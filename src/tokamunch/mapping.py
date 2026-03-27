@@ -7,8 +7,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-logger = logging.getLogger(__name__)
-
 from .config import CLIConfig, ConcurrencyMode
 from .context import MappingContext
 from .data_source_interface import (
@@ -20,6 +18,8 @@ from .selection import Selection, generate_selected_paths
 
 if TYPE_CHECKING:
     from .profiling import ProfileData
+
+logger = logging.getLogger(__name__)
 
 # ── error classification ──────────────────────────────────────────────────────
 
@@ -278,7 +278,11 @@ def collect_mapped_values(
                 "Use MappingContext.from_config() or set cli_config explicitly."
             )
         raw = _map_multiprocess(
-            ctx.cli_config, ctx.device, ctx.shot, paths, concurrency.workers,
+            ctx.cli_config,
+            ctx.device,
+            ctx.shot,
+            paths,
+            concurrency.workers,
             progress_callback,
         )
     else:

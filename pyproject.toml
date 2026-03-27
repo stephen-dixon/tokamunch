@@ -39,6 +39,7 @@ dev = [
     "black>=24",
     "ruff>=0.4",
     "mypy>=1.10",
+    "pre-commit>=3.7",
 ]
 docs = [
   "sphinx>=8",
@@ -78,6 +79,11 @@ target-version = ["py310"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+exclude = [
+    "src/tokamunch/_version.py",
+    "build/",
+    "dist/",
+]
 
 [tool.ruff.lint]
 select = [
@@ -103,3 +109,5 @@ ignore = [
 python_version = "3.10"
 strict = true
 ignore_missing_imports = true  # libtokamap, imas_data_dictionary have no stubs
+# mypy is enforced on src/ only; tests use untyped helpers and structural fakes.
+exclude = ["^tests/"]

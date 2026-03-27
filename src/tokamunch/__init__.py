@@ -1,11 +1,4 @@
 from . import plugin_api
-from .convert import (
-    read_ids_records,
-    read_imas_records,
-    read_json_records,
-    records_to_ids_objects,
-    convert_file,
-)
 from .config import (
     CLIConfig,
     ConcurrencyConfig,
@@ -17,7 +10,15 @@ from .config import (
     load_cli_config,
 )
 from .context import MappingContext
+from .convert import (
+    convert_file,
+    read_ids_records,
+    read_imas_records,
+    read_json_records,
+    records_to_ids_objects,
+)
 from .data_source_interface import TokamapInterface
+from .diff import diff_files, diff_records
 from .ids_helper import IDSHelper
 from .ids_writer import (
     ensure_ids_arrays_resized,
@@ -41,7 +42,6 @@ from .parsing import (
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .plugin_api import DataSource, DataSourceFactory, MapperProtocol
 from .selection import IdsSelection, MultiPathSelection, Selection, SinglePathSelection
-from .diff import diff_files, diff_records
 from .templates import load_mapping_keys, merge_mapping_stubs
 from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .types import ExpansionContext, IDSNode, NodeType, TrieNode, WriteContext
@@ -53,14 +53,14 @@ __all__ = [
     "DataSource",
     "DataSourceConfig",
     "DataSourceFactory",
-    "MapperProtocol",
     "ExpansionContext",
     "IDSHelper",
     "IDSNode",
     "IdsSelection",
-    "MultiPathSelection",
     "MapperConfig",
+    "MapperProtocol",
     "MappingContext",
+    "MultiPathSelection",
     "NodeType",
     "RunConfig",
     "Selection",
@@ -70,17 +70,12 @@ __all__ = [
     "WriteContext",
     "apply_config_overrides",
     "build_ids_path_trie",
-    "convert_file",
-    "diff_files",
-    "diff_records",
-    "merge_mapping_stubs",
-    "read_ids_records",
-    "read_imas_records",
-    "read_json_records",
-    "records_to_ids_objects",
     "concrete_path_to_schema_path",
     "concrete_path_to_template",
+    "convert_file",
     "create_mapper_from_config",
+    "diff_files",
+    "diff_records",
     "ensure_ids_arrays_resized",
     "expand_ids_path_trie",
     "expand_ids_path_trie_segments",
@@ -88,10 +83,15 @@ __all__ = [
     "generate_schema_paths_from_trie",
     "load_cli_config",
     "load_mapping_keys",
+    "merge_mapping_stubs",
     "normalise_schema_segment",
     "parse_concrete_path",
     "parse_schema_path",
     "plugin_api",
+    "read_ids_records",
+    "read_imas_records",
+    "read_json_records",
+    "records_to_ids_objects",
     "render_array_length_query_path",
     "render_concrete_path",
     "render_schema_path",

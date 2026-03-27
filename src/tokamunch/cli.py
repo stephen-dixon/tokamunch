@@ -6,6 +6,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from .checks import check_ids
 from .config import (
@@ -28,8 +29,18 @@ from .outputs import (
     render_verbose_records,
     write_json_file,
 )
-from .selection import IdsSelection, MultiPathSelection, SinglePathSelection, generate_selected_paths, path_matches
-from .templates import build_blank_mapping_template, load_mapping_keys, merge_mapping_stubs
+from .selection import (
+    IdsSelection,
+    MultiPathSelection,
+    SinglePathSelection,
+    generate_selected_paths,
+    path_matches,
+)
+from .templates import (
+    build_blank_mapping_template,
+    load_mapping_keys,
+    merge_mapping_stubs,
+)
 from .write_ids import SUPPORTED_SUFFIXES, IdsWriteError, write_imas_output
 
 logger = logging.getLogger(__name__)
@@ -81,15 +92,17 @@ def _make_context(
 
     *shot* overrides ``args.shot`` when provided (for multi-shot support).
     """
-    from .mapper import create_mapper_from_config
     from .data_source_interface import TokamapInterface as _TokamapInterface
+    from .mapper import create_mapper_from_config
 
     effective_shot = shot if shot is not None else getattr(args, "shot", None)
 
     if cli_cfg is not None:
         mapper = create_mapper_from_config(cli_cfg)
         resolved_device = getattr(args, "device", None) or cli_cfg.mapper.device
-        resolved_shot = effective_shot if effective_shot is not None else cli_cfg.run.default_shot
+        resolved_shot = (
+            effective_shot if effective_shot is not None else cli_cfg.run.default_shot
+        )
         tokamap = _TokamapInterface(mapper, resolved_device, shot=resolved_shot)
         return MappingContext(
             mapper=mapper,
@@ -218,7 +231,9 @@ def cmd_paths(args: argparse.Namespace) -> int:
     # Use the number of schema leaf paths as an approximate total for the progress
     # bar. Concrete paths may exceed this when array structs expand to multiple
     # elements, so the percentage can exceed 100 % — this is expected.
-    schema_leaf_count = sum(1 for _ in helper.generate_non_concrete_paths(leaves_only=True))
+    schema_leaf_count = sum(
+        1 for _ in helper.generate_non_concrete_paths(leaves_only=True)
+    )
 
     t0 = time.perf_counter()
     concrete_paths: list[str] = []
@@ -293,9 +308,6 @@ def _run_mapping_for_shot(
 ) -> tuple[list[Any], Any, float]:
     """Run mapping for a single shot and return (records, summary, total_wall)."""
     import tqdm as tqdm_mod
-
-    from .checkpoint import Checkpoint, apply_checkpoint, load_checkpoint, save_checkpoint
-    from .outputs import make_json_safe
 
     ctx = _make_context(args, cli_cfg=cli_cfg, shot=shot)
     _apply_concurrency_overrides(args, ctx)
@@ -392,17 +404,22 @@ def cmd_map(args: argparse.Namespace) -> int:
     shot_range_arg: list[int] | None = getattr(args, "shot_range", None)
     single_shot: int | None = getattr(args, "shot", None)
 
+    shots_list: list[int | None]
     if shots_arg is not None:
-        shots_list = shots_arg
+        shots_list = list(shots_arg)
     elif shot_range_arg is not None:
         if len(shot_range_arg) == 2:
             shots_list = list(range(shot_range_arg[0], shot_range_arg[1] + 1))
         else:
-            shots_list = list(range(shot_range_arg[0], shot_range_arg[1] + 1, shot_range_arg[2]))
+            shots_list = list(
+                range(shot_range_arg[0], shot_range_arg[1] + 1, shot_range_arg[2])
+            )
     else:
         shots_list = [single_shot]  # may be None — resolved later per shot
 
-    multi_shot = len(shots_list) > 1 or (len(shots_list) == 1 and shots_list[0] is not None and shots_arg is not None)
+    multi_shot = len(shots_list) > 1 or (
+        len(shots_list) == 1 and shots_list[0] is not None and shots_arg is not None
+    )
 
     if multi_shot and output_path_template is None:
         raise ValueError("--output is required when using --shots or --shot-range")
@@ -465,7 +482,9 @@ def cmd_map(args: argparse.Namespace) -> int:
         if eff_output is None:
             # Print to terminal
             if verbose:
-                text = render_verbose_records(records, verbose_errors=args.verbose_errors)
+                text = render_verbose_records(
+                    records, verbose_errors=args.verbose_errors
+                )
             else:
                 text = render_text_records(records, verbose_errors=args.verbose_errors)
             if text:
@@ -481,7 +500,9 @@ def cmd_map(args: argparse.Namespace) -> int:
 
                 cp = Checkpoint(
                     output_path=str(eff_output),
-                    completed_paths=[r.ids_path for r in records if r.ok and r.value is not None],
+                    completed_paths=[
+                        r.ids_path for r in records if r.ok and r.value is not None
+                    ],
                     results={
                         r.ids_path: make_json_safe(r.value)
                         for r in records
@@ -499,11 +520,16 @@ def cmd_map(args: argparse.Namespace) -> int:
                 )
                 print(f"Wrote JSON output to {eff_output}")
             else:
-                write_errors = write_imas_output(eff_output, records=records, force=args.force)
+                write_errors = write_imas_output(
+                    eff_output, records=records, force=args.force
+                )
                 print(f"Wrote {eff_output.suffix.upper()[1:]} output to {eff_output}")
                 if write_errors:
                     _handle_imas_write_errors(
-                        write_errors, eff_output, on_imas_error, binary_arrays=binary_arrays
+                        write_errors,
+                        eff_output,
+                        on_imas_error,
+                        binary_arrays=binary_arrays,
                     )
 
             if profile_data is not None:
@@ -555,9 +581,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
     output_path = Path(args.output)
 
     binary_arrays = _resolve_binary_arrays(args.binary_arrays, None)
-    on_imas_error = _resolve_on_imas_error(
-        getattr(args, "on_imas_error", None), None
-    )
+    on_imas_error = _resolve_on_imas_error(getattr(args, "on_imas_error", None), None)
 
     write_errors = convert_file(
         input_path,
@@ -624,7 +648,6 @@ def cmd_update_mapping(args: argparse.Namespace) -> int:
         leaves_only=args.leaves_only,
     )
 
-    existing_count: int
     import json as _json
 
     with existing_path.open(encoding="utf-8") as f:
@@ -696,11 +719,13 @@ def cmd_update(args: argparse.Namespace) -> int:
     mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
 
     if args.ids:
-        selection: IdsSelection | SinglePathSelection | MultiPathSelection = IdsSelection(
-            ids=args.ids,
-            match=None,
-            leaves_only=args.leaves_only,
-            mapping_keys=mapping_keys,
+        selection: IdsSelection | SinglePathSelection | MultiPathSelection = (
+            IdsSelection(
+                ids=args.ids,
+                match=None,
+                leaves_only=args.leaves_only,
+                mapping_keys=mapping_keys,
+            )
         )
     else:
         raise ValueError("--ids is required for the update command")
@@ -725,7 +750,9 @@ def cmd_update(args: argparse.Namespace) -> int:
     else:
         new_records = []
 
-    merged_records = list(existing_records) + [r for r in new_records if r.ok and r.value is not None]
+    merged_records = list(existing_records) + [
+        r for r in new_records if r.ok and r.value is not None
+    ]
 
     out_suffix = output_path.suffix.lower()
     binary_arrays = False
@@ -737,7 +764,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         )
         print(f"Wrote merged JSON to {output_path}")
     elif out_suffix in _SUPPORTED:
-        write_errors = write_imas_output(output_path, records=merged_records, force=args.force)
+        write_errors = write_imas_output(
+            output_path, records=merged_records, force=args.force
+        )
         print(f"Wrote merged {out_suffix.upper()[1:]} to {output_path}")
         if write_errors:
             _handle_imas_write_errors(
@@ -1309,7 +1338,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    logging.basicConfig(format="%(levelname)s %(name)s: %(message)s", level=logging.WARNING)
+    logging.basicConfig(
+        format="%(levelname)s %(name)s: %(message)s", level=logging.WARNING
+    )
     if args.log_level is not None:
         logging.getLogger().setLevel(args.log_level)
 

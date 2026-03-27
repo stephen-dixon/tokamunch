@@ -1,4 +1,5 @@
 """Shell completion script generation for the munchi CLI."""
+
 from __future__ import annotations
 
 

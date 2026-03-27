@@ -7,8 +7,8 @@ from typing import Any
 
 from .ids_writer import ensure_ids_arrays_resized, resize_and_set_ids_value
 from .mapping import MappingRecord
-from .parsing import IDSNode, NodeType, parse_concrete_path, render_array_length_query_path
-from .types import WriteContext
+from .parsing import parse_concrete_path, render_array_length_query_path
+from .types import IDSNode, NodeType, WriteContext
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,9 @@ def _derive_array_sizes(paths: list[str]) -> dict[str, int]:
     return sizes
 
 
-def _group_records_by_ids(records: list[MappingRecord]) -> dict[str, list[MappingRecord]]:
+def _group_records_by_ids(
+    records: list[MappingRecord],
+) -> dict[str, list[MappingRecord]]:
     """Split successfully-mapped records by IDS name (first path segment)."""
     groups: dict[str, list[MappingRecord]] = {}
     for record in records:

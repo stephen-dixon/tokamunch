@@ -67,7 +67,9 @@ def test_tokamap_interface_get_array_length_returns_zero_on_system_error() -> No
 
     class SystemErrorMapper:
         def map(self, device, ids_path, args):
-            raise SystemError("<built-in function map> returned a result with an exception set")
+            raise SystemError(
+                "<built-in function map> returned a result with an exception set"
+            )
 
     iface = TokamapInterface(SystemErrorMapper(), "mastu")
 

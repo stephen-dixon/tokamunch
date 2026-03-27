@@ -8,9 +8,16 @@ import time
 from pathlib import Path
 
 from .checks import check_ids
-from .config import CLIConfig, ConcurrencyConfig, ConcurrencyMode, render_cli_config_template
+from .config import (
+    CLIConfig,
+    ConcurrencyConfig,
+    ConcurrencyMode,
+    apply_config_overrides,
+    load_cli_config,
+    render_cli_config_template,
+)
 from .context import MappingContext
-from .convert import convert_file
+from .convert import convert_file, read_json_records
 from .mapping import collect_mapped_values
 from .outputs import (
     build_json_results,
@@ -18,10 +25,11 @@ from .outputs import (
     print_summary,
     render_text_records,
     render_text_schema_map,
+    render_verbose_records,
     write_json_file,
 )
-from .selection import IdsSelection, MultiPathSelection, SinglePathSelection, path_matches
-from .templates import build_blank_mapping_template, load_mapping_keys
+from .selection import IdsSelection, MultiPathSelection, SinglePathSelection, generate_selected_paths, path_matches
+from .templates import build_blank_mapping_template, load_mapping_keys, merge_mapping_stubs
 from .write_ids import SUPPORTED_SUFFIXES, IdsWriteError, write_imas_output
 
 logger = logging.getLogger(__name__)
@@ -42,6 +50,59 @@ Notes:
   - '--match' filters expanded concrete paths, e.g. 'magnetics/flux_loop*'.
   - '--mapping' restricts paths to those present in a mapping JSON file.
 """
+
+
+def _load_config_with_overrides(args: argparse.Namespace) -> CLIConfig | None:
+    """Load CLIConfig from file (if it exists) and apply any --set overrides.
+
+    Returns ``None`` when the config file does not exist (graceful degradation
+    for subcommands that accept an optional config).
+    """
+    config_path = Path(getattr(args, "config", "munchi.toml"))
+    if not config_path.exists():
+        return None
+    cfg = load_cli_config(config_path)
+    overrides: list[str] = getattr(args, "set", None) or []
+    if overrides:
+        cfg = apply_config_overrides(cfg, overrides)
+    return cfg
+
+
+def _make_context(
+    args: argparse.Namespace,
+    *,
+    cli_cfg: CLIConfig | None = None,
+    shot: int | None = None,
+) -> MappingContext:
+    """Build a MappingContext, applying --set overrides if present.
+
+    When *cli_cfg* is given it is used directly (avoids re-loading from disk).
+    Otherwise ``MappingContext.from_config`` is called as usual.
+
+    *shot* overrides ``args.shot`` when provided (for multi-shot support).
+    """
+    from .mapper import create_mapper_from_config
+    from .data_source_interface import TokamapInterface as _TokamapInterface
+
+    effective_shot = shot if shot is not None else getattr(args, "shot", None)
+
+    if cli_cfg is not None:
+        mapper = create_mapper_from_config(cli_cfg)
+        resolved_device = getattr(args, "device", None) or cli_cfg.mapper.device
+        resolved_shot = effective_shot if effective_shot is not None else cli_cfg.run.default_shot
+        tokamap = _TokamapInterface(mapper, resolved_device, shot=resolved_shot)
+        return MappingContext(
+            mapper=mapper,
+            tokamap=tokamap,
+            device=resolved_device,
+            shot=resolved_shot,
+            cli_config=cli_cfg,
+            concurrency=cli_cfg.run.concurrency,
+        )
+
+    return MappingContext.from_config(
+        args.config, device=getattr(args, "device", None), shot=effective_shot
+    )
 
 
 def _apply_log_level(cli_override: str | None, cfg: CLIConfig | None) -> None:
@@ -148,7 +209,8 @@ def cmd_paths(args: argparse.Namespace) -> int:
                 f"Unsupported output file extension for {output_path!s}. Use .json."
             )
 
-    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+    cli_cfg = _load_config_with_overrides(args)
+    ctx = _make_context(args, cli_cfg=cli_cfg)
     _apply_log_level(args.log_level, ctx.cli_config)
     logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
     helper = ctx.ids_helper(args.ids)
@@ -202,60 +264,43 @@ def cmd_paths(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_map(args: argparse.Namespace) -> int:
+def _shot_output_path(template: str, shot: int) -> Path:
+    """Resolve per-shot output path.
+
+    If *template* contains ``{shot}``, substitute it; otherwise insert
+    ``_SHOT`` before the file extension (e.g. ``results.json`` →
+    ``results_47125.json``).
+    """
+    if "{shot}" in template:
+        return Path(template.format(shot=shot))
+    p = Path(template)
+    return p.with_name(p.stem + f"_{shot}" + p.suffix)
+
+
+def _run_mapping_for_shot(
+    args: argparse.Namespace,
+    cli_cfg: CLIConfig | None,
+    shot: int | None,
+    *,
+    selection: IdsSelection | SinglePathSelection | MultiPathSelection,
+    binary_arrays: bool,
+    on_imas_error: str,
+    dry_run: bool,
+    limit: int | None,
+    profile_data: Any,
+    verbose: bool,
+    checkpoint_path: Path | None,
+) -> tuple[list[Any], Any, float]:
+    """Run mapping for a single shot and return (records, summary, total_wall)."""
     import tqdm as tqdm_mod
 
-    from .profiling import ProfileData, render_profile_report
+    from .checkpoint import Checkpoint, apply_checkpoint, load_checkpoint, save_checkpoint
+    from .outputs import make_json_safe
 
-    if args.output is not None:
-        output_path = Path(args.output)
-        if output_path.suffix.lower() not in {".json", *SUPPORTED_SUFFIXES}:
-            raise ValueError(
-                f"Unsupported output file extension for {output_path!s}. "
-                "Use no --output for terminal text, .json for JSON, "
-                ".h5 for HDF5, or .nc for NetCDF."
-            )
-
-    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
-    _apply_log_level(args.log_level, ctx.cli_config)
+    ctx = _make_context(args, cli_cfg=cli_cfg, shot=shot)
     _apply_concurrency_overrides(args, ctx)
-    logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
 
-    binary_arrays = _resolve_binary_arrays(args.binary_arrays, ctx.cli_config)
-    on_imas_error = _resolve_on_imas_error(
-        getattr(args, "on_imas_error", None), ctx.cli_config
-    )
-    dry_run: bool = getattr(args, "dry_run", False)
-    limit: int | None = getattr(args, "limit", None)
-    profile_stats: bool = getattr(args, "profile_stats", False)
-    profile_file: str | None = getattr(args, "profile", None)
-
-    mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
-
-    selection: IdsSelection | SinglePathSelection | MultiPathSelection
-    if args.path is not None:
-        selection = SinglePathSelection(path=args.path, mapping_keys=mapping_keys)
-    elif args.paths is not None:
-        resolved = _resolve_paths_arg(args.paths)
-        logger.info("Selected %d explicit paths", len(resolved))
-        selection = MultiPathSelection(paths=resolved, mapping_keys=mapping_keys)
-    else:
-        selection = IdsSelection(
-            ids=args.ids,
-            match=args.match,
-            leaves_only=args.leaves_only,
-            mapping_keys=mapping_keys,
-        )
-
-    profile_data = ProfileData() if (profile_stats or profile_file) else None
-
-    # The bar is created with total=None (indeterminate) during path expansion,
-    # then switched to the exact count once phase 1 completes and mapping begins.
     disable_bar = not sys.stderr.isatty()
-
-    profiler = cProfile.Profile() if profile_file else None
-    if profiler is not None:
-        profiler.enable()
 
     t0_wall = time.perf_counter()
     with tqdm_mod.tqdm(
@@ -267,8 +312,6 @@ def cmd_map(args: argparse.Namespace) -> int:
     ) as bar:
 
         def _on_path_expanded(n: int) -> None:
-            # Called by collect_mapped_values once it knows the full path list,
-            # before mapping starts: set the exact total and switch description.
             if dry_run:
                 bar.reset(total=n)
                 bar.set_description("Dry run")
@@ -290,6 +333,188 @@ def cmd_map(args: argparse.Namespace) -> int:
             limit=limit,
         )
 
+    total_wall = time.perf_counter() - t0_wall
+    return records, summary, total_wall
+
+
+def cmd_map(args: argparse.Namespace) -> int:
+    from .profiling import ProfileData, render_profile_report
+
+    if args.output is not None:
+        output_path_template = args.output
+        output_path = Path(args.output)
+        if output_path.suffix.lower() not in {".json", *SUPPORTED_SUFFIXES}:
+            raise ValueError(
+                f"Unsupported output file extension for {output_path!s}. "
+                "Use no --output for terminal text, .json for JSON, "
+                ".h5 for HDF5, or .nc for NetCDF."
+            )
+    else:
+        output_path_template = None
+
+    cli_cfg = _load_config_with_overrides(args)
+
+    # Resolve log level early using config
+    _apply_log_level(args.log_level, cli_cfg)
+
+    binary_arrays = _resolve_binary_arrays(args.binary_arrays, cli_cfg)
+    on_imas_error = _resolve_on_imas_error(
+        getattr(args, "on_imas_error", None), cli_cfg
+    )
+    dry_run: bool = getattr(args, "dry_run", False)
+    limit: int | None = getattr(args, "limit", None)
+    profile_stats: bool = getattr(args, "profile_stats", False)
+    profile_file: str | None = getattr(args, "profile", None)
+    verbose: bool = getattr(args, "verbose", False)
+    checkpoint_path: Path | None = (
+        Path(args.checkpoint) if getattr(args, "checkpoint", None) else None
+    )
+
+    mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
+
+    selection: IdsSelection | SinglePathSelection | MultiPathSelection
+    if args.path is not None:
+        selection = SinglePathSelection(path=args.path, mapping_keys=mapping_keys)
+    elif args.paths is not None:
+        resolved = _resolve_paths_arg(args.paths)
+        logger.info("Selected %d explicit paths", len(resolved))
+        selection = MultiPathSelection(paths=resolved, mapping_keys=mapping_keys)
+    else:
+        selection = IdsSelection(
+            ids=args.ids,
+            match=args.match,
+            leaves_only=args.leaves_only,
+            mapping_keys=mapping_keys,
+        )
+
+    # Determine the list of shots to run
+    shots_arg: list[int] | None = getattr(args, "shots", None)
+    shot_range_arg: list[int] | None = getattr(args, "shot_range", None)
+    single_shot: int | None = getattr(args, "shot", None)
+
+    if shots_arg is not None:
+        shots_list = shots_arg
+    elif shot_range_arg is not None:
+        if len(shot_range_arg) == 2:
+            shots_list = list(range(shot_range_arg[0], shot_range_arg[1] + 1))
+        else:
+            shots_list = list(range(shot_range_arg[0], shot_range_arg[1] + 1, shot_range_arg[2]))
+    else:
+        shots_list = [single_shot]  # may be None — resolved later per shot
+
+    multi_shot = len(shots_list) > 1 or (len(shots_list) == 1 and shots_list[0] is not None and shots_arg is not None)
+
+    if multi_shot and output_path_template is None:
+        raise ValueError("--output is required when using --shots or --shot-range")
+
+    profile_data = ProfileData() if (profile_stats or profile_file) else None
+
+    profiler = cProfile.Profile() if profile_file else None
+    if profiler is not None:
+        profiler.enable()
+
+    all_records: list[Any] = []
+    all_summaries: list[Any] = []
+    overall_t0 = time.perf_counter()
+
+    for shot in shots_list:
+        if multi_shot:
+            print(f"\n--- Shot {shot} ---", file=sys.stderr)
+
+        records, summary, total_wall = _run_mapping_for_shot(
+            args,
+            cli_cfg,
+            shot,
+            selection=selection,
+            binary_arrays=binary_arrays,
+            on_imas_error=on_imas_error,
+            dry_run=dry_run,
+            limit=limit,
+            profile_data=profile_data,
+            verbose=verbose,
+            checkpoint_path=checkpoint_path,
+        )
+        all_records.extend(records)
+        all_summaries.append(summary)
+
+        logger.info(
+            "Results: mapped=%d none=%d suppressed=%d errors=%d",
+            summary.mapped,
+            summary.returned_none,
+            summary.suppressed_errors,
+            summary.unexpected_errors,
+        )
+
+        if dry_run:
+            print(
+                f"Dry run: {len(records)} paths expanded in {summary.elapsed_s:.2f}s "
+                "(no mapper calls made).",
+                file=sys.stderr,
+            )
+            continue
+
+        # Determine effective output path for this shot
+        if output_path_template is not None:
+            if multi_shot and shot is not None:
+                eff_output = _shot_output_path(output_path_template, shot)
+            else:
+                eff_output = Path(output_path_template)
+        else:
+            eff_output = None
+
+        if eff_output is None:
+            # Print to terminal
+            if verbose:
+                text = render_verbose_records(records, verbose_errors=args.verbose_errors)
+            else:
+                text = render_text_records(records, verbose_errors=args.verbose_errors)
+            if text:
+                print(text)
+            print_summary(summary)
+        else:
+            # Checkpointing: save before writing output; delete on success
+            _t_before_output = time.perf_counter()
+
+            if checkpoint_path is not None:
+                from .checkpoint import Checkpoint, save_checkpoint
+                from .outputs import make_json_safe
+
+                cp = Checkpoint(
+                    output_path=str(eff_output),
+                    completed_paths=[r.ids_path for r in records if r.ok and r.value is not None],
+                    results={
+                        r.ids_path: make_json_safe(r.value)
+                        for r in records
+                        if r.ok and r.value is not None
+                    },
+                )
+                save_checkpoint(checkpoint_path, cp)
+
+            suffix = eff_output.suffix.lower()
+            if suffix == ".json":
+                write_json_file(
+                    eff_output,
+                    build_json_results(records, binary_arrays=binary_arrays),
+                    force=args.force,
+                )
+                print(f"Wrote JSON output to {eff_output}")
+            else:
+                write_errors = write_imas_output(eff_output, records=records, force=args.force)
+                print(f"Wrote {eff_output.suffix.upper()[1:]} output to {eff_output}")
+                if write_errors:
+                    _handle_imas_write_errors(
+                        write_errors, eff_output, on_imas_error, binary_arrays=binary_arrays
+                    )
+
+            if profile_data is not None:
+                profile_data.phases.output_s += time.perf_counter() - _t_before_output
+
+            # Delete checkpoint on successful write
+            if checkpoint_path is not None and checkpoint_path.exists():
+                checkpoint_path.unlink()
+
+            print_summary(summary)
+
     if profiler is not None:
         profiler.disable()
         profiler.dump_stats(profile_file)  # type: ignore[arg-type]
@@ -300,72 +525,29 @@ def cmd_map(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    total_wall = time.perf_counter() - t0_wall
-    if profile_data is not None:
-        # Attribute any remaining wall time to output phase when writing below.
-        _profile_data = profile_data
-        _t_before_output = time.perf_counter()
-    else:
-        _profile_data = None
-        _t_before_output = 0.0
-
-    logger.info(
-        "Results: mapped=%d none=%d suppressed=%d errors=%d",
-        summary.mapped,
-        summary.returned_none,
-        summary.suppressed_errors,
-        summary.unexpected_errors,
-    )
-
     if dry_run:
-        print(
-            f"Dry run: {len(records)} paths expanded in {summary.elapsed_s:.2f}s "
-            "(no mapper calls made).",
-            file=sys.stderr,
-        )
         if profile_stats and profile_data is not None:
+            total_wall = time.perf_counter() - overall_t0
             print(render_profile_report(profile_data, total_wall), file=sys.stderr)
         return 0
 
-    if args.output is None:
-        text = render_text_records(records, verbose_errors=args.verbose_errors)
-        if text:
-            print(text)
-        print_summary(summary)
-        if profile_stats and profile_data is not None:
-            print(render_profile_report(profile_data, total_wall), file=sys.stderr)
-        return 1 if summary.has_unexpected_errors else 0
-
-    output_path = Path(args.output)
-    suffix = output_path.suffix.lower()
-
-    if suffix == ".json":
-        write_json_file(
-            output_path,
-            build_json_results(records, binary_arrays=binary_arrays),
-            force=args.force,
-        )
-        if _profile_data is not None:
-            _profile_data.phases.output_s = time.perf_counter() - _t_before_output
-        print(f"Wrote JSON output to {output_path}")
-        print_summary(summary)
-        if profile_stats and profile_data is not None:
-            print(render_profile_report(profile_data, total_wall), file=sys.stderr)
-        return 1 if summary.has_unexpected_errors else 0
-
-    # suffix in SUPPORTED_SUFFIXES (already validated above)
-    write_errors = write_imas_output(output_path, records=records, force=args.force)
-    if _profile_data is not None:
-        _profile_data.phases.output_s = time.perf_counter() - _t_before_output
-    print(f"Wrote {output_path.suffix.upper()[1:]} output to {output_path}")
-    if write_errors:
-        _handle_imas_write_errors(
-            write_errors, output_path, on_imas_error, binary_arrays=binary_arrays
-        )
-    print_summary(summary)
     if profile_stats and profile_data is not None:
+        total_wall = time.perf_counter() - overall_t0
         print(render_profile_report(profile_data, total_wall), file=sys.stderr)
-    return 1 if (summary.has_unexpected_errors or write_errors) else 0
+
+    # Combined summary for multi-shot
+    if multi_shot and all_summaries:
+        total_paths = sum(s.total_paths for s in all_summaries)
+        total_mapped = sum(s.mapped for s in all_summaries)
+        total_elapsed = time.perf_counter() - overall_t0
+        print(
+            f"\nCombined: {len(shots_list)} shots, {total_paths} total paths, "
+            f"{total_mapped} mapped, {total_elapsed:.2f}s elapsed.",
+            file=sys.stderr,
+        )
+
+    has_errors = any(s.has_unexpected_errors for s in all_summaries)
+    return 1 if has_errors else 0
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
@@ -419,7 +601,8 @@ def cmd_init_mapping(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+    cli_cfg = _load_config_with_overrides(args)
+    ctx = _make_context(args, cli_cfg=cli_cfg)
     _apply_log_level(args.log_level, ctx.cli_config)
     print("Config loaded successfully.")
     print(f"Device: {ctx.device}")
@@ -429,6 +612,163 @@ def cmd_check(args: argparse.Namespace) -> int:
         count = check_ids(args.ids, leaves_only=args.leaves_only)
         print(f"IDS recognised: {args.ids}")
         print(f"Schema paths found: {count}")
+
+    return 0
+
+
+def cmd_update_mapping(args: argparse.Namespace) -> int:
+    existing_path = Path(args.mapping)
+    merged = merge_mapping_stubs(
+        args.ids,
+        existing_path,
+        leaves_only=args.leaves_only,
+    )
+
+    existing_count: int
+    import json as _json
+
+    with existing_path.open(encoding="utf-8") as f:
+        existing_keys = set(_json.load(f).keys())
+    new_stub_count = sum(1 for k in merged if k not in existing_keys)
+
+    print(f"{new_stub_count} new stub(s) added.", file=sys.stderr)
+
+    if args.output is not None:
+        output_path = Path(args.output)
+        write_json_file(output_path, merged, force=args.force)
+        print(f"Wrote updated mapping to {output_path}")
+    else:
+        import json as _json2
+
+        print(_json2.dumps(merged, indent=2, ensure_ascii=False))
+
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    from .diff import diff_files, render_diff
+
+    path_a = Path(args.file_a)
+    path_b = Path(args.file_b)
+
+    entries = diff_files(path_a, path_b, ids_names=args.ids or None)
+    text = render_diff(
+        entries,
+        label_a=str(path_a),
+        label_b=str(path_b),
+        show_unchanged=args.show_unchanged,
+    )
+    print(text)
+
+    has_diff = any(e.status != "unchanged" for e in entries)
+    return 1 if has_diff else 0
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    from .convert import read_imas_records
+    from .write_ids import SUPPORTED_SUFFIXES as _SUPPORTED
+
+    input_path = Path(args.input)
+    output_path = Path(args.output)
+
+    # Load existing records
+    in_suffix = input_path.suffix.lower()
+    if in_suffix == ".json":
+        existing_records = read_json_records(input_path)
+    elif in_suffix in _SUPPORTED:
+        ids_names_for_read = [args.ids] if args.ids else None
+        if not ids_names_for_read:
+            raise ValueError(
+                "Reading from an IMAS file requires --ids (one or more IDS names)."
+            )
+        existing_records = read_imas_records(input_path, ids_names_for_read)
+    else:
+        raise ValueError(
+            f"Unsupported input format {in_suffix!r}. Use .json, .h5, or .nc."
+        )
+
+    existing_paths: set[str] = {r.ids_path for r in existing_records if r.ok}
+
+    cli_cfg = _load_config_with_overrides(args)
+    ctx = _make_context(args, cli_cfg=cli_cfg)
+    _apply_log_level(args.log_level, ctx.cli_config)
+
+    mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
+
+    if args.ids:
+        selection: IdsSelection | SinglePathSelection | MultiPathSelection = IdsSelection(
+            ids=args.ids,
+            match=None,
+            leaves_only=args.leaves_only,
+            mapping_keys=mapping_keys,
+        )
+    else:
+        raise ValueError("--ids is required for the update command")
+
+    # Expand all concrete paths
+    all_paths = list(generate_selected_paths(selection, ctx))
+    new_paths = [p for p in all_paths if p not in existing_paths]
+    print(
+        f"Found {len(all_paths)} total paths; {len(existing_paths)} already present; "
+        f"mapping {len(new_paths)} new path(s).",
+        file=sys.stderr,
+    )
+
+    if new_paths:
+        from .mapping import _map_serial
+
+        raw = _map_serial(ctx.tokamap, new_paths)
+        from .mapping import _build_records
+
+        new_records, summary = _build_records(raw, verbose_errors=args.verbose_errors)
+        print_summary(summary)
+    else:
+        new_records = []
+
+    merged_records = list(existing_records) + [r for r in new_records if r.ok and r.value is not None]
+
+    out_suffix = output_path.suffix.lower()
+    binary_arrays = False
+    if out_suffix == ".json":
+        write_json_file(
+            output_path,
+            build_json_results(merged_records),
+            force=args.force,
+        )
+        print(f"Wrote merged JSON to {output_path}")
+    elif out_suffix in _SUPPORTED:
+        write_errors = write_imas_output(output_path, records=merged_records, force=args.force)
+        print(f"Wrote merged {out_suffix.upper()[1:]} to {output_path}")
+        if write_errors:
+            _handle_imas_write_errors(
+                write_errors, output_path, "fallback-json", binary_arrays=binary_arrays
+            )
+    else:
+        raise ValueError(
+            f"Unsupported output format {out_suffix!r}. Use .json, .h5, or .nc."
+        )
+
+    return 0
+
+
+def cmd_completions(args: argparse.Namespace) -> int:
+    from .completions import (
+        generate_bash_completion,
+        generate_fish_completion,
+        generate_zsh_completion,
+        get_ids_names,
+    )
+
+    ids_names = get_ids_names()
+
+    if args.shell == "bash":
+        print(generate_bash_completion(ids_names), end="")
+    elif args.shell == "zsh":
+        print(generate_zsh_completion(ids_names), end="")
+    elif args.shell == "fish":
+        print(generate_fish_completion(ids_names), end="")
+    else:
+        raise ValueError(f"Unknown shell {args.shell!r}")
 
     return 0
 
@@ -456,6 +796,17 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--leaves-only",
         action="store_true",
         help="Only include leaf paths",
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        metavar="KEY=VALUE",
+        default=None,
+        help=(
+            "Override a config value at runtime, e.g. "
+            "--set run.concurrency.mode=thread --set run.concurrency.workers=4. "
+            "Can be repeated."
+        ),
     )
 
 
@@ -664,6 +1015,48 @@ def build_parser() -> argparse.ArgumentParser:
             "Inspect with: python -m pstats FILE  or  snakeviz FILE"
         ),
     )
+    parser_map.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help=(
+            "Show expanded output for each mapped value (dtype, shape, min/max, "
+            "first elements). Errors show full traceback."
+        ),
+    )
+    _shots_group = parser_map.add_mutually_exclusive_group()
+    _shots_group.add_argument(
+        "--shots",
+        nargs="+",
+        type=int,
+        metavar="N",
+        help=(
+            "Map these specific shot numbers. "
+            "--output is required and may contain {shot} as a template."
+        ),
+    )
+    _shots_group.add_argument(
+        "--shot-range",
+        nargs="+",
+        type=int,
+        metavar=("START", "END"),
+        dest="shot_range",
+        help=(
+            "Map shots in range START..END (inclusive), with optional STEP. "
+            "Provide 2 or 3 integers: START END [STEP]. "
+            "--output is required and may contain {shot} as a template."
+        ),
+    )
+    parser_map.add_argument(
+        "--checkpoint",
+        default=None,
+        metavar="FILE",
+        help=(
+            "Checkpoint file path. If the file exists, completed paths are skipped "
+            "and mapping resumes from where it left off. "
+            "The checkpoint is deleted on successful completion."
+        ),
+    )
     parser_map.set_defaults(func=cmd_map)
 
     parser_init_config = subparsers.add_parser(
@@ -774,6 +1167,119 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional IDS name to validate and inspect",
     )
     parser_check.set_defaults(func=cmd_check)
+
+    # ── update-mapping ────────────────────────────────────────────────────────
+    parser_update_mapping = subparsers.add_parser(
+        "update-mapping",
+        help="Add new stub entries to an existing mapping JSON file",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser_update_mapping.add_argument(
+        "--ids",
+        type=str,
+        required=True,
+        help="IDS name, e.g. 'magnetics'",
+    )
+    parser_update_mapping.add_argument(
+        "--mapping",
+        type=str,
+        required=True,
+        metavar="FILE",
+        help="Existing mapping JSON file to update",
+    )
+    parser_update_mapping.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Output file (default: print JSON to stdout)",
+    )
+    parser_update_mapping.add_argument(
+        "--leaves-only",
+        action="store_true",
+        help="Only add stubs for leaf schema paths",
+    )
+    add_force_argument(parser_update_mapping)
+    parser_update_mapping.set_defaults(func=cmd_update_mapping)
+
+    # ── diff ──────────────────────────────────────────────────────────────────
+    parser_diff = subparsers.add_parser(
+        "diff",
+        help="Compare two mapping result files",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser_diff.add_argument(
+        "file_a",
+        metavar="FILE_A",
+        help="First file (.json, .h5, or .nc)",
+    )
+    parser_diff.add_argument(
+        "file_b",
+        metavar="FILE_B",
+        help="Second file (.json, .h5, or .nc)",
+    )
+    parser_diff.add_argument(
+        "--ids",
+        nargs="+",
+        metavar="IDS",
+        default=None,
+        help="IDS name(s) to read when the input is an IMAS file",
+    )
+    parser_diff.add_argument(
+        "--show-unchanged",
+        action="store_true",
+        dest="show_unchanged",
+        help="Also print unchanged paths",
+    )
+    parser_diff.set_defaults(func=cmd_diff)
+
+    # ── update ────────────────────────────────────────────────────────────────
+    parser_update = subparsers.add_parser(
+        "update",
+        help="Map missing paths and merge with existing results",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add_common_arguments(parser_update)
+    parser_update.add_argument(
+        "--input",
+        required=True,
+        metavar="FILE",
+        help="Existing result file (.json, .h5, or .nc)",
+    )
+    parser_update.add_argument(
+        "--output",
+        required=True,
+        metavar="FILE",
+        help="Output file (.json, .h5, or .nc)",
+    )
+    parser_update.add_argument(
+        "--ids",
+        type=str,
+        default=None,
+        help="IDS name to map (required for IMAS input; optional for JSON)",
+    )
+    parser_update.add_argument(
+        "--mapping",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Restrict paths to those present in this mapping JSON file",
+    )
+    add_force_argument(parser_update)
+    add_verbose_errors_argument(parser_update)
+    parser_update.set_defaults(func=cmd_update)
+
+    # ── completions ───────────────────────────────────────────────────────────
+    parser_completions = subparsers.add_parser(
+        "completions",
+        help="Generate shell completion scripts",
+    )
+    parser_completions.add_argument(
+        "shell",
+        choices=["bash", "zsh", "fish"],
+        help="Target shell",
+    )
+    parser_completions.set_defaults(func=cmd_completions)
 
     return parser
 

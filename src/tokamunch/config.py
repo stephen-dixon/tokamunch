@@ -156,6 +156,130 @@ def load_cli_config(path: str | Path) -> CLIConfig:
     )
 
 
+def apply_config_overrides(cfg: CLIConfig, overrides: list[str]) -> CLIConfig:
+    """Apply ``dotted.key=value`` overrides to a CLIConfig, returning a new instance.
+
+    Supported keys:
+        run.concurrency.mode       → ConcurrencyMode
+        run.concurrency.workers    → int
+        run.log_level              → str (must be a valid log level)
+        run.binary_arrays          → bool ("true"/"false"/"1"/"0")
+        run.on_imas_error          → str ("fallback-json" or "raise")
+        run.default_shot           → int
+        mapper.device              → str
+
+    Since all dataclasses use ``slots=True``, new instances are constructed
+    rather than mutating the originals.
+
+    Raises
+    ------
+    ValueError
+        For unknown keys or invalid values.
+    """
+    from dataclasses import replace
+
+    if not overrides:
+        return cfg
+
+    # Unpack current state so we can build new instances.
+    mapper_device = cfg.mapper.device
+    mapper_config = cfg.mapper.config
+    mapper_config_params = cfg.mapper.config_params
+
+    run_default_shot = cfg.run.default_shot
+    run_log_level = cfg.run.log_level
+    run_binary_arrays = cfg.run.binary_arrays
+    run_on_imas_error = cfg.run.on_imas_error
+    conc_mode = cfg.run.concurrency.mode
+    conc_workers = cfg.run.concurrency.workers
+
+    valid_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    valid_on_imas_error = {"fallback-json", "raise"}
+
+    def _parse_bool(raw: str) -> bool:
+        if raw.lower() in ("true", "1"):
+            return True
+        if raw.lower() in ("false", "0"):
+            return False
+        raise ValueError(f"Expected true/false/1/0, got {raw!r}")
+
+    for override in overrides:
+        if "=" not in override:
+            raise ValueError(
+                f"Invalid override {override!r}: expected KEY=VALUE format"
+            )
+        key, _, raw_value = override.partition("=")
+        key = key.strip()
+
+        if key == "run.concurrency.mode":
+            try:
+                conc_mode = ConcurrencyMode(raw_value)
+            except ValueError:
+                valid = [m.value for m in ConcurrencyMode]
+                raise ValueError(
+                    f"Invalid run.concurrency.mode {raw_value!r}. "
+                    f"Must be one of: {', '.join(valid)}"
+                )
+        elif key == "run.concurrency.workers":
+            try:
+                conc_workers = int(raw_value)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid run.concurrency.workers {raw_value!r}: expected an integer"
+                )
+        elif key == "run.log_level":
+            run_log_level = raw_value.upper()
+            if run_log_level not in valid_log_levels:
+                raise ValueError(
+                    f"Invalid run.log_level {raw_value!r}. "
+                    f"Must be one of: {', '.join(sorted(valid_log_levels))}"
+                )
+        elif key == "run.binary_arrays":
+            run_binary_arrays = _parse_bool(raw_value)
+        elif key == "run.on_imas_error":
+            if raw_value not in valid_on_imas_error:
+                raise ValueError(
+                    f"Invalid run.on_imas_error {raw_value!r}. "
+                    f"Must be one of: {', '.join(sorted(valid_on_imas_error))}"
+                )
+            run_on_imas_error = raw_value
+        elif key == "run.default_shot":
+            try:
+                run_default_shot = int(raw_value)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid run.default_shot {raw_value!r}: expected an integer"
+                )
+        elif key == "mapper.device":
+            mapper_device = raw_value
+        else:
+            raise ValueError(
+                f"Unknown config override key {key!r}. "
+                "Supported keys: run.concurrency.mode, run.concurrency.workers, "
+                "run.log_level, run.binary_arrays, run.on_imas_error, "
+                "run.default_shot, mapper.device"
+            )
+
+    new_concurrency = ConcurrencyConfig(mode=conc_mode, workers=conc_workers)
+    new_run = RunConfig(
+        default_shot=run_default_shot,
+        concurrency=new_concurrency,
+        log_level=run_log_level,
+        binary_arrays=run_binary_arrays,
+        on_imas_error=run_on_imas_error,
+    )
+    new_mapper = MapperConfig(
+        device=mapper_device,
+        config=mapper_config,
+        config_params=mapper_config_params,
+    )
+    return CLIConfig(
+        mapper=new_mapper,
+        run=new_run,
+        data_sources=cfg.data_sources,
+    )
+
+
 def render_cli_config_template() -> str:
     return """# Skeleton munchi configuration file
 # Fill in the values for your local setup.

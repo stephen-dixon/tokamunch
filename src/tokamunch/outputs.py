@@ -3,10 +3,53 @@ from __future__ import annotations
 import base64
 import json
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
 from .mapping import MappingRecord, MappingSummary
+
+
+def _format_value(value: Any) -> str:
+    """Format a mapped value compactly for terminal display.
+
+    - numpy arrays: ``dtype[DxD] min=X max=Y [a, b, c, ...]``
+    - Python lists with >6 elements: ``list[N] [a, b, c, ...]``
+    - Everything else: ``str(value)``
+    """
+    # numpy array — detected by presence of .dtype and .shape
+    if hasattr(value, "dtype") and hasattr(value, "shape"):
+        dtype_str = str(value.dtype)
+        shape_str = "x".join(str(d) for d in value.shape)
+        # Try to compute min/max for numeric dtypes
+        try:
+            import numpy as np
+
+            mn = np.min(value)
+            mx = np.max(value)
+            stats = f" min={mn:.4g} max={mx:.4g}"
+        except (TypeError, ValueError):
+            stats = ""
+        # First 3 elements
+        flat = value.flat if hasattr(value, "flat") else iter(value)
+        first3 = []
+        for i, v in enumerate(flat):
+            if i >= 3:
+                break
+            first3.append(f"{v:.4g}" if isinstance(v, float) else str(v))
+        total = value.size if hasattr(value, "size") else len(value)
+        ellipsis_suffix = ", ..." if total > 3 else ""
+        preview = "[" + ", ".join(first3) + ellipsis_suffix + "]"
+        return f"{dtype_str}[{shape_str}]{stats} {preview}"
+
+    # Python list with more than 6 elements
+    if isinstance(value, list) and len(value) > 6:
+        n = len(value)
+        first3 = [str(v) for v in value[:3]]
+        preview = "[" + ", ".join(first3) + ", ...]"
+        return f"list[{n}] {preview}"
+
+    return str(value)
 
 
 def _encode_ndarray_binary(arr: Any) -> dict[str, Any]:
@@ -60,10 +103,45 @@ def render_text_records(records: list[MappingRecord], *, verbose_errors: bool) -
     for record in records:
         if record.ok:
             if record.value is not None:
-                lines.append(f"{record.ids_path}: {record.value}")
+                lines.append(f"{record.ids_path}: {_format_value(record.value)}")
         else:
             if verbose_errors or not record.suppressed:
                 lines.append(f"{record.ids_path}: {record.error}")
+    return "\n".join(lines)
+
+
+def render_verbose_records(
+    records: list[MappingRecord], *, verbose_errors: bool
+) -> str:
+    """Render records in an expanded block format.
+
+    Successful records:
+        path
+          value: <formatted value>
+
+    Error records: show full traceback when *verbose_errors* is True,
+    or just the error message for unsuppressed errors.
+    """
+    lines: list[str] = []
+    for record in records:
+        if record.ok:
+            if record.value is not None:
+                lines.append(record.ids_path)
+                lines.append(f"  value: {_format_value(record.value)}")
+        else:
+            show = verbose_errors or not record.suppressed
+            if show:
+                lines.append(record.ids_path)
+                if record.error is not None:
+                    tb = "".join(
+                        traceback.format_exception(
+                            type(record.error), record.error, record.error.__traceback__
+                        )
+                    ).rstrip()
+                    for tb_line in tb.splitlines():
+                        lines.append(f"  {tb_line}")
+                else:
+                    lines.append("  <error>")
     return "\n".join(lines)
 
 

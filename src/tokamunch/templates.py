@@ -6,6 +6,9 @@ from typing import Any
 
 import tokamunch as tm
 
+# Metadata-only keys that may appear alongside "comment" in a comment stub.
+_COMMENT_STUB_ALLOWED_KEYS = frozenset({"comment", "units", "source"})
+
 
 def _to_template_path(schema_path: str) -> str:
     """Convert a schema path to its mapping-template form.
@@ -14,6 +17,21 @@ def _to_template_path(schema_path: str) -> str:
     path convention of ``[N]`` indices.
     """
     return schema_path.replace("(:)", "[#]")
+
+
+def is_comment_stub(value: Any) -> bool:
+    """Return True if *value* is a documented stub with no mapping expression.
+
+    A comment stub is a dict that has a ``"comment"`` key and whose remaining
+    keys are limited to the allowed metadata set (``"units"``, ``"source"``).
+    Any other key (e.g. an expression) means this entry carries real data and
+    is therefore *not* a stub.
+    """
+    if not isinstance(value, dict):
+        return False
+    if "comment" not in value:
+        return False
+    return set(value.keys()) <= _COMMENT_STUB_ALLOWED_KEYS
 
 
 def build_blank_mapping_template(
@@ -32,7 +50,7 @@ def build_blank_mapping_template(
         if path in mapping:
             duplicates.append(path)
             continue
-        mapping[path] = {}
+        mapping[path] = {"comment": ""}
 
     if duplicates:
         examples = ", ".join(repr(path) for path in duplicates[:10])
@@ -58,3 +76,55 @@ def load_mapping_keys(path: Path) -> frozenset[str]:
             f"Mapping file {path} must contain a JSON object at the top level"
         )
     return frozenset(data.keys())
+
+
+def merge_mapping_stubs(
+    ids_name: str,
+    existing_path: Path,
+    *,
+    leaves_only: bool = False,
+) -> dict[str, Any]:
+    """Merge an existing mapping file with blank stubs for any missing IDS paths.
+
+    All existing entries are preserved with their original values.  Any
+    template path present in the IDS schema but absent from the file is added
+    as ``{"comment": ""}``.
+
+    Existing entries appear first (in their original file order), followed by
+    new stubs sorted alphabetically.
+
+    Parameters
+    ----------
+    ids_name:
+        IDS name, e.g. ``"magnetics"``.
+    existing_path:
+        Path to the existing mapping JSON file.
+    leaves_only:
+        If True, only leaf schema paths are considered when adding stubs.
+
+    Returns
+    -------
+    dict[str, Any]
+        Merged mapping dict.
+    """
+    with existing_path.open(encoding="utf-8") as f:
+        existing: dict[str, Any] = json.load(f)
+    if not isinstance(existing, dict):
+        raise ValueError(
+            f"Mapping file {existing_path} must contain a JSON object at the top level"
+        )
+
+    helper = tm.IDSHelper.from_ids_name(ids_name)
+    all_template_paths = sorted(
+        _to_template_path(path)
+        for path in helper.generate_non_concrete_paths(leaves_only=leaves_only)
+    )
+
+    existing_keys = set(existing.keys())
+    new_paths = sorted(p for p in all_template_paths if p not in existing_keys)
+
+    merged: dict[str, Any] = dict(existing)
+    for path in new_paths:
+        merged[path] = {"comment": ""}
+
+    return merged

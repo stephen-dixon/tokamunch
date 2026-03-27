@@ -13,6 +13,7 @@ from .config import (
     DataSourceConfig,
     MapperConfig,
     RunConfig,
+    apply_config_overrides,
     load_cli_config,
 )
 from .context import MappingContext
@@ -40,7 +41,8 @@ from .parsing import (
 from .path_expansion import expand_ids_path_trie, expand_ids_path_trie_segments
 from .plugin_api import DataSource, DataSourceFactory, MapperProtocol
 from .selection import IdsSelection, MultiPathSelection, Selection, SinglePathSelection
-from .templates import load_mapping_keys
+from .diff import diff_files, diff_records
+from .templates import load_mapping_keys, merge_mapping_stubs
 from .trie import build_ids_path_trie, generate_schema_paths_from_trie
 from .types import ExpansionContext, IDSNode, NodeType, TrieNode, WriteContext
 
@@ -66,8 +68,12 @@ __all__ = [
     "TokamapInterface",
     "TrieNode",
     "WriteContext",
+    "apply_config_overrides",
     "build_ids_path_trie",
     "convert_file",
+    "diff_files",
+    "diff_records",
+    "merge_mapping_stubs",
     "read_ids_records",
     "read_imas_records",
     "read_json_records",

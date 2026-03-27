@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .ids_writer import resize_and_set_ids_value
+from .ids_writer import ensure_ids_arrays_resized, resize_and_set_ids_value
 from .mapping import MappingRecord
 from .parsing import IDSNode, NodeType, parse_concrete_path, render_array_length_query_path
 from .types import WriteContext
@@ -60,10 +60,17 @@ def _populate_ids(
 ) -> None:
     """Write mapped values from *records* into an imas IDS object.
 
-    Array-struct nodes are resized once (tracked via ``WriteContext``) before
-    any values are set. Records whose final segment is an array-struct node
-    (i.e. the path points to a struct array rather than a scalar/array field)
-    are skipped — those nodes are sized by the resize pass only.
+    Records whose final path segment is an array-struct node (e.g.
+    ``equilibrium/time_slice[0]``) are treated as non-leaf nodes: the
+    corresponding IDS array is resized to accommodate the index, but no value
+    is assigned.  This matches the convention that array-struct paths in a
+    mapping file represent the size/structure of the IDS array, not a scalar
+    field to be written.  Non-IDS outputs (console, JSON) are unaffected and
+    continue to include these records normally.
+
+    All other records (leaf scalar/array fields) are both resized and assigned.
+    The ``WriteContext`` ensures each array-struct node is resized at most once
+    across the whole loop.
 
     *array_sizes* may be supplied by callers that already hold the expansion
     cache (e.g. ``IDSHelper.array_sizes``) and know that no path filters were
@@ -76,15 +83,20 @@ def _populate_ids(
     for record in records:
         segs = list(parse_concrete_path(record.ids_path))
         if segs and segs[-1].node_type is NodeType.ARRAY_STRUCT:
-            continue
-        resize_and_set_ids_value(
-            ids_obj,
-            segs,
-            record.value,
-            array_sizes,
-            write_context=ctx,
-            skip_root_segment=True,
-        )
+            # Resize the array to accommodate this index but do not assign a
+            # value — array-struct nodes are structural, not leaf fields.
+            ensure_ids_arrays_resized(
+                ids_obj, segs, array_sizes, write_context=ctx, skip_root_segment=True
+            )
+        else:
+            resize_and_set_ids_value(
+                ids_obj,
+                segs,
+                record.value,
+                array_sizes,
+                write_context=ctx,
+                skip_root_segment=True,
+            )
 
 
 def _imas_uri(path: Path) -> str:

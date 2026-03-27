@@ -13,6 +13,7 @@ files, and validating configuration.
    mapping-files
    path-syntax
    conversion
+   profiling
    checks
    development
 

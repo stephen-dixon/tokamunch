@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import cProfile
 import logging
 import sys
 import time
@@ -204,6 +205,8 @@ def cmd_paths(args: argparse.Namespace) -> int:
 def cmd_map(args: argparse.Namespace) -> int:
     import tqdm as tqdm_mod
 
+    from .profiling import ProfileData, render_profile_report
+
     if args.output is not None:
         output_path = Path(args.output)
         if output_path.suffix.lower() not in {".json", *SUPPORTED_SUFFIXES}:
@@ -222,6 +225,10 @@ def cmd_map(args: argparse.Namespace) -> int:
     on_imas_error = _resolve_on_imas_error(
         getattr(args, "on_imas_error", None), ctx.cli_config
     )
+    dry_run: bool = getattr(args, "dry_run", False)
+    limit: int | None = getattr(args, "limit", None)
+    profile_stats: bool = getattr(args, "profile_stats", False)
+    profile_file: str | None = getattr(args, "profile", None)
 
     mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
 
@@ -240,9 +247,17 @@ def cmd_map(args: argparse.Namespace) -> int:
             mapping_keys=mapping_keys,
         )
 
+    profile_data = ProfileData() if (profile_stats or profile_file) else None
+
     # The bar is created with total=None (indeterminate) during path expansion,
     # then switched to the exact count once phase 1 completes and mapping begins.
     disable_bar = not sys.stderr.isatty()
+
+    profiler = cProfile.Profile() if profile_file else None
+    if profiler is not None:
+        profiler.enable()
+
+    t0_wall = time.perf_counter()
     with tqdm_mod.tqdm(
         total=None,
         desc="Expanding paths",
@@ -254,8 +269,12 @@ def cmd_map(args: argparse.Namespace) -> int:
         def _on_path_expanded(n: int) -> None:
             # Called by collect_mapped_values once it knows the full path list,
             # before mapping starts: set the exact total and switch description.
-            bar.reset(total=n)
-            bar.set_description("Mapping")
+            if dry_run:
+                bar.reset(total=n)
+                bar.set_description("Dry run")
+            else:
+                bar.reset(total=n)
+                bar.set_description("Mapping")
 
         def _on_path_mapped(n: int) -> None:
             bar.update(n)
@@ -266,7 +285,30 @@ def cmd_map(args: argparse.Namespace) -> int:
             verbose_errors=args.verbose_errors,
             on_paths_ready=_on_path_expanded,
             progress_callback=_on_path_mapped,
+            profile=profile_data,
+            dry_run=dry_run,
+            limit=limit,
         )
+
+    if profiler is not None:
+        profiler.disable()
+        profiler.dump_stats(profile_file)  # type: ignore[arg-type]
+        print(f"cProfile stats written to {profile_file}", file=sys.stderr)
+        print(
+            f"  Inspect with: python -m pstats {profile_file}  "
+            f"or  snakeviz {profile_file}",
+            file=sys.stderr,
+        )
+
+    total_wall = time.perf_counter() - t0_wall
+    if profile_data is not None:
+        # Attribute any remaining wall time to output phase when writing below.
+        _profile_data = profile_data
+        _t_before_output = time.perf_counter()
+    else:
+        _profile_data = None
+        _t_before_output = 0.0
+
     logger.info(
         "Results: mapped=%d none=%d suppressed=%d errors=%d",
         summary.mapped,
@@ -275,11 +317,23 @@ def cmd_map(args: argparse.Namespace) -> int:
         summary.unexpected_errors,
     )
 
+    if dry_run:
+        print(
+            f"Dry run: {len(records)} paths expanded in {summary.elapsed_s:.2f}s "
+            "(no mapper calls made).",
+            file=sys.stderr,
+        )
+        if profile_stats and profile_data is not None:
+            print(render_profile_report(profile_data, total_wall), file=sys.stderr)
+        return 0
+
     if args.output is None:
         text = render_text_records(records, verbose_errors=args.verbose_errors)
         if text:
             print(text)
         print_summary(summary)
+        if profile_stats and profile_data is not None:
+            print(render_profile_report(profile_data, total_wall), file=sys.stderr)
         return 1 if summary.has_unexpected_errors else 0
 
     output_path = Path(args.output)
@@ -291,18 +345,26 @@ def cmd_map(args: argparse.Namespace) -> int:
             build_json_results(records, binary_arrays=binary_arrays),
             force=args.force,
         )
+        if _profile_data is not None:
+            _profile_data.phases.output_s = time.perf_counter() - _t_before_output
         print(f"Wrote JSON output to {output_path}")
         print_summary(summary)
+        if profile_stats and profile_data is not None:
+            print(render_profile_report(profile_data, total_wall), file=sys.stderr)
         return 1 if summary.has_unexpected_errors else 0
 
     # suffix in SUPPORTED_SUFFIXES (already validated above)
     write_errors = write_imas_output(output_path, records=records, force=args.force)
+    if _profile_data is not None:
+        _profile_data.phases.output_s = time.perf_counter() - _t_before_output
     print(f"Wrote {output_path.suffix.upper()[1:]} output to {output_path}")
     if write_errors:
         _handle_imas_write_errors(
             write_errors, output_path, on_imas_error, binary_arrays=binary_arrays
         )
     print_summary(summary)
+    if profile_stats and profile_data is not None:
+        print(render_profile_report(profile_data, total_wall), file=sys.stderr)
     return 1 if (summary.has_unexpected_errors or write_errors) else 0
 
 
@@ -564,6 +626,42 @@ def build_parser() -> argparse.ArgumentParser:
             "Action when an IDS fails to write to an IMAS file. "
             "'fallback-json' (default) logs the error and writes failed IDS records "
             "to a companion _fallback.json file; 'raise' stops the run immediately."
+        ),
+    )
+    parser_map.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help=(
+            "Expand paths only — do not call the mapper. "
+            "Useful for checking how many paths will be mapped and "
+            "how long path expansion takes."
+        ),
+    )
+    parser_map.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Map at most N paths (after expansion and filtering). Useful for quick tests.",
+    )
+    parser_map.add_argument(
+        "--profile-stats",
+        action="store_true",
+        dest="profile_stats",
+        help=(
+            "Print a profiling report after the run: phase timings (expansion / "
+            "mapping / output), per-call stats for mapper.map() and "
+            "get_array_length(), and bottleneck hints."
+        ),
+    )
+    parser_map.add_argument(
+        "--profile",
+        default=None,
+        metavar="FILE",
+        help=(
+            "Write a cProfile stats file to FILE for detailed line-level profiling. "
+            "Inspect with: python -m pstats FILE  or  snakeviz FILE"
         ),
     )
     parser_map.set_defaults(func=cmd_map)

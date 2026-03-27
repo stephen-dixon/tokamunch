@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+from typing import TYPE_CHECKING, Any
 
 from .plugin_api import MapperProtocol
+
+if TYPE_CHECKING:
+    from .profiling import ProfileData
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +37,11 @@ class TokamapInterface:
         self._args: dict[str, Any] = dict(extra_args or {})
         if shot is not None:
             self._args["shot"] = shot
+        # Set externally to enable per-call timing (see profiling.py).
+        self.profile: ProfileData | None = None
 
     def get_array_length(self, ids_path: str) -> int:
+        t0 = time.perf_counter() if self.profile is not None else 0.0
         try:
             res = self.map(ids_path)
             if res is None:
@@ -61,7 +68,27 @@ class TokamapInterface:
         except Exception as exc:
             if str(exc).startswith(_MISSING_MAPPING_PREFIX):
                 return 0
+            if isinstance(exc, SystemError):
+                # libtokamap's C-level map() sometimes returns a value while also
+                # having an exception set — CPython converts that to a SystemError.
+                # Treat it as "unknown length" so expansion continues rather than
+                # crashing the whole run.
+                logger.warning(
+                    "C-level error from mapper during array-length query for %r: %s — "
+                    "treating as length 0 (paths under this array will not be expanded)",
+                    ids_path,
+                    exc,
+                )
+                return 0
             raise
+        finally:
+            if self.profile is not None:
+                self.profile.array_length.record(time.perf_counter() - t0)
 
     def map(self, ids_path: str) -> Any:
+        if self.profile is not None:
+            t0 = time.perf_counter()
+            result = self.mapper.map(self.device, ids_path, self._args)
+            self.profile.mapper_map.record(time.perf_counter() - t0)
+            return result
         return self.mapper.map(self.device, ids_path, self._args)

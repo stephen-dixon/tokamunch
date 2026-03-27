@@ -116,6 +116,20 @@ Functions for moving data between munchi JSON output, imas-python IMAS files
 .. autofunction:: tokamunch.read_imas_records
 .. autofunction:: tokamunch.convert_file
 
+Profiling
+---------
+
+.. autoclass:: tokamunch.profiling.ProfileData
+   :members:
+
+.. autoclass:: tokamunch.profiling.PhaseTimings
+   :members:
+
+.. autoclass:: tokamunch.profiling.CallStats
+   :members:
+
+.. autofunction:: tokamunch.profiling.render_profile_report
+
 Trie
 ----
 

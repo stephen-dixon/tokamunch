@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,9 @@ from .data_source_interface import (
     _decode_s1_bytes,
 )
 from .selection import Selection, generate_selected_paths
+
+if TYPE_CHECKING:
+    from .profiling import ProfileData
 
 # ── error classification ──────────────────────────────────────────────────────
 
@@ -227,20 +230,43 @@ def collect_mapped_values(
     verbose_errors: bool,
     progress_callback: _ProgressCallback | None = None,
     on_paths_ready: Callable[[int], None] | None = None,
+    profile: ProfileData | None = None,
+    dry_run: bool = False,
+    limit: int | None = None,
 ) -> tuple[list[MappingRecord], MappingSummary]:
+    if profile is not None:
+        ctx.tokamap.profile = profile
+
     t0 = time.perf_counter()
 
     # Phase 1: expand all concrete paths (includes remote array-length queries).
+    t_expansion = time.perf_counter()
     paths = list(generate_selected_paths(selection, ctx))
+    if limit is not None:
+        paths = paths[:limit]
+    if profile is not None:
+        profile.phases.expansion_s = time.perf_counter() - t_expansion
+
     logger.info("Mapping %d paths", len(paths))
     if on_paths_ready is not None:
         on_paths_ready(len(paths))
+
+    if dry_run:
+        # Skip mapper calls; return None records for all paths.
+        raw: list[_RawResult] = [(p, None, None) for p in paths]
+        if progress_callback is not None:
+            for _ in paths:
+                progress_callback(1)
+        records, summary = _build_records(raw, verbose_errors=verbose_errors)
+        summary.elapsed_s = time.perf_counter() - t0
+        return records, summary
 
     # Phase 2: map each path, dispatching to the configured concurrency backend.
     concurrency = ctx.concurrency
     logger.debug(
         "Concurrency: mode=%s workers=%d", concurrency.mode.value, concurrency.workers
     )
+    t_mapping = time.perf_counter()
     if concurrency.mode == ConcurrencyMode.SERIAL or concurrency.workers <= 1:
         raw = _map_serial(ctx.tokamap, paths, progress_callback)
     elif concurrency.mode == ConcurrencyMode.THREAD:
@@ -257,6 +283,9 @@ def collect_mapped_values(
         )
     else:
         raise ValueError(f"Unknown concurrency mode: {concurrency.mode!r}")
+
+    if profile is not None:
+        profile.phases.mapping_s = time.perf_counter() - t_mapping
 
     records, summary = _build_records(raw, verbose_errors=verbose_errors)
     summary.elapsed_s = time.perf_counter() - t0

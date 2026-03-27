@@ -113,21 +113,25 @@ for estimating per-path throughput:
 Understanding bottlenecks
 --------------------------
 
-+------------------------------+--------------------------------------------+----------------------------------+
-| Observation                  | Likely cause                               | Suggested action                 |
-+==============================+============================================+==================================+
-| Expansion >> mapping time    | Many array-length queries; deeply nested   | ``--leaves-only`` or             |
-|                              | IDS with many AoS levels                  | ``--mapping`` to reduce paths    |
-+------------------------------+--------------------------------------------+----------------------------------+
-| mapper.map() mean > 100 ms   | Network / remote file I/O in data source   | ``--concurrency-mode thread``    |
-|                              | plugin (latency-bound)                     | or ``process``                   |
-+------------------------------+--------------------------------------------+----------------------------------+
-| mapper.map() mean < 5 ms     | Local computation (CPU-bound)              | Threading unlikely to help;      |
-|                              |                                            | profile the plugin itself        |
-+------------------------------+--------------------------------------------+----------------------------------+
-| Many get_array_length calls  | Lots of AoS nodes; slow per-call           | Cache array lengths in plugin;   |
-|                              | (same as mapper.map())                     | or reduce path depth             |
-+------------------------------+--------------------------------------------+----------------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 40 30
+
+   * - Observation
+     - Likely cause
+     - Suggested action
+   * - Expansion >> mapping time
+     - Many array-length queries; deeply nested IDS with many AoS levels
+     - ``--leaves-only`` or ``--mapping`` to reduce paths
+   * - ``mapper.map()`` mean > 100 ms
+     - Network / remote file I/O in data source plugin (latency-bound)
+     - ``--concurrency-mode thread`` or ``process``
+   * - ``mapper.map()`` mean < 5 ms
+     - Local computation (CPU-bound)
+     - Threading unlikely to help; profile the plugin itself
+   * - Many ``get_array_length`` calls
+     - Lots of AoS nodes; slow per-call (same as ``mapper.map()``)
+     - Cache array lengths in plugin; or reduce path depth
 
 Library usage
 -------------

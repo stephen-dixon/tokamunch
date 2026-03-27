@@ -156,16 +156,22 @@ Mapping annotations
 Profiling
 ---------
 
+See also: :doc:`profiling` for usage examples.
+
 .. autoclass:: tokamunch.profiling.ProfileData
    :members:
+   :no-index:
 
 .. autoclass:: tokamunch.profiling.PhaseTimings
    :members:
+   :no-index:
 
 .. autoclass:: tokamunch.profiling.CallStats
    :members:
+   :no-index:
 
 .. autofunction:: tokamunch.profiling.render_profile_report
+   :no-index:
 
 Trie
 ----

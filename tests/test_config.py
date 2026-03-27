@@ -160,6 +160,41 @@ workers = 8
         assert cfg.run.concurrency.workers == 8
 
 
+class TestLoadCliConfigLogLevel:
+    _BASE = """
+[mapper]
+device = "mast"
+
+[mapper.config_params]
+mapping_directory = "/m"
+schemas_directory = "/s"
+"""
+
+    def test_default_log_level_is_warning(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE)
+        cfg = load_cli_config(p)
+        assert cfg.run.log_level == "WARNING"
+
+    def test_log_level_parsed(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + '\n[run]\nlog_level = "DEBUG"\n')
+        cfg = load_cli_config(p)
+        assert cfg.run.log_level == "DEBUG"
+
+    def test_log_level_case_insensitive(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + '\n[run]\nlog_level = "info"\n')
+        cfg = load_cli_config(p)
+        assert cfg.run.log_level == "INFO"
+
+    def test_invalid_log_level_raises(self, tmp_path: Path) -> None:
+        p = tmp_path / "munchi.toml"
+        _write_toml(p, self._BASE + '\n[run]\nlog_level = "VERBOSE"\n')
+        with pytest.raises(ValueError, match="log_level"):
+            load_cli_config(p)
+
+
 class TestLoadCliConfigDataSources:
     def test_data_sources_parsed(self, tmp_path: Path) -> None:
         munchi_cfg = tmp_path / "munchi.toml"

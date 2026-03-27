@@ -45,6 +45,7 @@ class MapperConfig:
 class RunConfig:
     default_shot: int | None = None
     concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
+    log_level: str = "WARNING"
 
 
 @dataclass(slots=True)
@@ -97,9 +98,18 @@ def load_cli_config(path: str | Path) -> CLIConfig:
         workers=int(concurrency_raw.get("workers", 1)),
     )
 
+    log_level_raw = str(run_raw.get("log_level", "WARNING")).upper()
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if log_level_raw not in valid_levels:
+        raise ValueError(
+            f"Invalid 'run.log_level' value {log_level_raw!r} in {config_path}. "
+            f"Must be one of: {', '.join(sorted(valid_levels))}"
+        )
+
     run = RunConfig(
         default_shot=run_raw.get("default_shot"),
         concurrency=concurrency,
+        log_level=log_level_raw,
     )
 
     data_sources: list[DataSourceConfig] = []
@@ -151,6 +161,7 @@ config = "config.toml"
 
 [run]
 default_shot = 0
+# log_level = "WARNING"  # DEBUG | INFO | WARNING | ERROR | CRITICAL (CLI --log-level takes precedence)
 
 # Concurrency settings (optional).
 # mode:    "serial"  — sequential, always safe (default)

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .checks import check_ids
-from .config import render_cli_config_template
+from .config import CLIConfig, ConcurrencyConfig, ConcurrencyMode, render_cli_config_template
 from .context import MappingContext
 from .mapping import collect_mapped_values
 from .outputs import (
@@ -39,6 +39,29 @@ Notes:
 """
 
 
+def _apply_log_level(cli_override: str | None, cfg: CLIConfig | None) -> None:
+    """Set the root logger level from config, unless the CLI flag was given.
+
+    ``basicConfig`` in ``main()`` always runs first (at WARNING), so this only
+    needs to call ``setLevel`` when a different level is required.
+    """
+    if cli_override is not None:
+        return  # already applied in main()
+    if cfg is not None:
+        logging.getLogger().setLevel(cfg.run.log_level)
+
+
+def _apply_concurrency_overrides(args: argparse.Namespace, ctx: MappingContext) -> None:
+    """Patch ctx.concurrency with any CLI overrides for mode or workers."""
+    raw_mode = getattr(args, "concurrency_mode", None)
+    raw_workers = getattr(args, "workers", None)
+    mode = ConcurrencyMode(raw_mode) if raw_mode is not None else ctx.concurrency.mode
+    workers = raw_workers if raw_workers is not None else ctx.concurrency.workers
+    if mode is not ctx.concurrency.mode or workers != ctx.concurrency.workers:
+        ctx.concurrency = ConcurrencyConfig(mode=mode, workers=workers)
+        logger.debug("Concurrency overridden: mode=%s workers=%d", mode.value, workers)
+
+
 def _resolve_paths_arg(values: list[str]) -> list[str]:
     """Return a list of concrete paths from the ``--paths`` argument.
 
@@ -61,6 +84,7 @@ def _resolve_paths_arg(values: list[str]) -> list[str]:
 
 def cmd_paths(args: argparse.Namespace) -> int:
     ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+    _apply_log_level(args.log_level, ctx.cli_config)
     logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
     helper = ctx.ids_helper(args.ids)
 
@@ -89,6 +113,8 @@ def cmd_map(args: argparse.Namespace) -> int:
             )
 
     ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+    _apply_log_level(args.log_level, ctx.cli_config)
+    _apply_concurrency_overrides(args, ctx)
     logger.info("Loaded config: device=%s shot=%s", ctx.device, ctx.shot)
 
     mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
@@ -167,6 +193,7 @@ def cmd_init_mapping(args: argparse.Namespace) -> int:
 
 def cmd_check(args: argparse.Namespace) -> int:
     ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+    _apply_log_level(args.log_level, ctx.cli_config)
     print("Config loaded successfully.")
     print(f"Device: {ctx.device}")
     print(f"Shot: {ctx.shot}")
@@ -262,9 +289,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--log-level",
-        default="WARNING",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging verbosity (default: WARNING)",
+        default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Logging verbosity; overrides log_level in config (default: WARNING)",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -311,6 +338,19 @@ def build_parser() -> argparse.ArgumentParser:
             "Path to a mapping JSON file. Only IDS paths whose template form "
             "appears as a key in the file will be mapped."
         ),
+    )
+    parser_map.add_argument(
+        "--concurrency-mode",
+        default=None,
+        choices=["serial", "thread", "process"],
+        help="Override concurrency mode from config",
+    )
+    parser_map.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Override number of parallel workers from config",
     )
     parser_map.set_defaults(func=cmd_map)
 
@@ -375,10 +415,9 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    logging.basicConfig(
-        format="%(levelname)s %(name)s: %(message)s",
-        level=getattr(logging, args.log_level),
-    )
+    logging.basicConfig(format="%(levelname)s %(name)s: %(message)s", level=logging.WARNING)
+    if args.log_level is not None:
+        logging.getLogger().setLevel(args.log_level)
 
     try:
         raise SystemExit(args.func(args))

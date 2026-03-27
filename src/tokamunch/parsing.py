@@ -8,6 +8,7 @@ from .types import IDSNode, NodeType, SegmentInterner
 
 _SCHEMA_ARRAY_SUFFIX = "(:)"
 _CONCRETE_SEGMENT_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<index>\d+)\])?$")
+_CONCRETE_INDEX_RE = re.compile(r"\[\d+\]")
 
 
 def normalise_schema_segment(raw: str) -> str:
@@ -70,6 +71,20 @@ def render_schema_path(nodes: Iterable[IDSNode]) -> str:
 
 def render_concrete_path(nodes: Iterable[IDSNode]) -> str:
     return "/".join(render_concrete_segment(node) for node in nodes)
+
+
+def concrete_path_to_template(path: str) -> str:
+    """Convert a concrete runtime path to its mapping-template form.
+
+    Replaces every concrete array index ``[N]`` with the template
+    placeholder ``[#]``, enabling lookup against mapping-file keys.
+
+    Example::
+
+        "magnetics/flux_loop[0]/position[2]/r"
+        -> "magnetics/flux_loop[#]/position[#]/r"
+    """
+    return _CONCRETE_INDEX_RE.sub("[#]", path)
 
 
 def render_array_length_query_path(nodes: Iterable[IDSNode]) -> str:

@@ -15,10 +15,19 @@ def _decode_s1_bytes(value: Any) -> Any:
 
 
 class TokamapInterface:
-    def __init__(self, mapper: Any, device: str, args: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        mapper: Any,
+        device: str,
+        *,
+        shot: int | None = None,
+        extra_args: dict[str, Any] | None = None,
+    ):
         self.mapper = mapper
         self.device = device
-        self.args = args or {}
+        self._args: dict[str, Any] = dict(extra_args or {})
+        if shot is not None:
+            self._args["shot"] = shot
 
     def get_array_length(self, ids_path: str) -> int:
         try:
@@ -32,4 +41,4 @@ class TokamapInterface:
             raise
 
     def map(self, ids_path: str) -> Any:
-        return self.mapper.map(self.device, ids_path, self.args)
+        return self.mapper.map(self.device, ids_path, self._args)

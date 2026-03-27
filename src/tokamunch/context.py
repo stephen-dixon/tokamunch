@@ -1,42 +1,58 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import tokamunch as tm
+from .config import ConcurrencyConfig
 
 
 @dataclass
-class CLIContext:
-    cfg: Any
+class MappingContext:
+    """Holds all runtime state needed to execute a mapping run.
+
+    Can be constructed directly for programmatic (library) use, or via
+    ``from_config`` to load settings from a TOML config file for CLI use.
+    """
+
     mapper: Any
     tokamap: tm.TokamapInterface
     device: str
-    shot: int
-    config_path: str
+    shot: int | None
+    # None when constructed programmatically (not from a config file).
+    # Required for process-based concurrency, which re-initialises a mapper
+    # in each worker process by re-reading the config.
+    config_path: str | None = None
+    concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
 
     def ids_helper(self, ids_name: str) -> tm.IDSHelper:
         return tm.IDSHelper.from_ids_name(ids_name)
 
+    @classmethod
+    def from_config(
+        cls,
+        config: str,
+        *,
+        device: str | None = None,
+        shot: int | None = None,
+    ) -> "MappingContext":
+        """Build a MappingContext from a munchi TOML config file.
 
-def load_context(config: str, device: str | None, shot: int | None) -> CLIContext:
-    cfg = tm.load_cli_config(config)
-    mapper = tm.create_mapper_from_config(cfg)
+        ``device`` and ``shot`` override the values in the config when provided.
+        """
+        cfg = tm.load_cli_config(config)
+        mapper = tm.create_mapper_from_config(cfg)
 
-    resolved_device = device or cfg.mapper.device
-    resolved_shot = shot if shot is not None else cfg.run.default_shot
+        resolved_device = device or cfg.mapper.device
+        resolved_shot = shot if shot is not None else cfg.run.default_shot
 
-    tokamap = tm.TokamapInterface(
-        mapper,
-        resolved_device,
-        {"shot": resolved_shot},
-    )
+        tokamap = tm.TokamapInterface(mapper, resolved_device, shot=resolved_shot)
 
-    return CLIContext(
-        cfg=cfg,
-        mapper=mapper,
-        tokamap=tokamap,
-        device=resolved_device,
-        shot=resolved_shot,
-        config_path=config,
-    )
+        return cls(
+            mapper=mapper,
+            tokamap=tokamap,
+            device=resolved_device,
+            shot=resolved_shot,
+            config_path=config,
+            concurrency=cfg.run.concurrency,
+        )

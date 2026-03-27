@@ -16,11 +16,13 @@ def make_json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [make_json_safe(v) for v in value]
     if hasattr(value, "tolist"):
-        return make_json_safe(value.tolist())
+        # numpy's tolist() recurses into nested arrays, producing pure Python
+        # types at every level — no need for a second make_json_safe pass.
+        return value.tolist()
     if hasattr(value, "item"):
         try:
-            return make_json_safe(value.item())
-        except Exception:
+            return value.item()
+        except (ValueError, TypeError):
             pass
     return str(value)
 

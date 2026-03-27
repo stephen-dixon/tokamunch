@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import ConcurrencyMode
-from .context import CLIContext
+from .context import MappingContext
 from .data_source_interface import TokamapInterface, _MISSING_MAPPING_PREFIX, _decode_s1_bytes
-from .selection import PathSelection, generate_selected_paths
+from .selection import Selection, generate_selected_paths
 
 
 # ── error classification ──────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ def _init_process_worker(config_path: str, device: str, shot: int | None) -> Non
 
     cfg = load_cli_config(config_path)
     mapper = create_mapper_from_config(cfg)
-    _worker_tokamap = TokamapInterface(mapper, device, {"shot": shot})
+    _worker_tokamap = TokamapInterface(mapper, device, shot=shot)
 
 
 def _process_worker_map(ids_path: str) -> tuple[str, Any, str | None]:
@@ -178,13 +178,13 @@ def _build_records(
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-def map_path(ctx: CLIContext, ids_path: str) -> Any:
+def map_path(ctx: MappingContext, ids_path: str) -> Any:
     return normalise_map_result(ctx.tokamap.map(ids_path))
 
 
 def collect_mapped_values(
-    ctx: CLIContext,
-    selection: PathSelection,
+    ctx: MappingContext,
+    selection: Selection,
     *,
     verbose_errors: bool,
 ) -> tuple[list[MappingRecord], MappingSummary]:
@@ -192,12 +192,17 @@ def collect_mapped_values(
     paths = list(generate_selected_paths(selection, ctx))
 
     # Phase 2: map each path, dispatching to the configured concurrency backend.
-    concurrency = ctx.cfg.run.concurrency
+    concurrency = ctx.concurrency
     if concurrency.mode == ConcurrencyMode.SERIAL or concurrency.workers <= 1:
         raw = _map_serial(ctx.tokamap, paths)
     elif concurrency.mode == ConcurrencyMode.THREAD:
         raw = _map_threaded(ctx.tokamap, paths, concurrency.workers)
     elif concurrency.mode == ConcurrencyMode.PROCESS:
+        if ctx.config_path is None:
+            raise RuntimeError(
+                "Process-based concurrency requires a config file path. "
+                "Use MappingContext.from_config() or set config_path explicitly."
+            )
         raw = _map_multiprocess(ctx.config_path, ctx.device, ctx.shot, paths, concurrency.workers)
     else:
         raise ValueError(f"Unknown concurrency mode: {concurrency.mode!r}")

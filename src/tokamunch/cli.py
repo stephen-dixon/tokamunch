@@ -6,11 +6,11 @@ from pathlib import Path
 
 from .checks import check_ids
 from .config import render_cli_config_template
-from .context import load_context
+from .context import MappingContext
 from .mapping import collect_mapped_values
 from .outputs import build_json_results, print_summary, render_text_records, write_json_file
-from .selection import PathSelection, path_matches
-from .templates import build_blank_mapping_template
+from .selection import IdsSelection, SinglePathSelection, path_matches
+from .templates import build_blank_mapping_template, load_mapping_keys
 from .write_ids import write_h5_output
 
 
@@ -28,13 +28,12 @@ Notes:
   - 'map --path' expects one concrete path.
   - 'map --ids magnetics' expands all concrete paths for that IDS.
   - '--match' filters expanded concrete paths, e.g. 'magnetics/flux_loop*'.
-  - Array-struct nodes ending in '/#' are collapsed in mapping templates:
-      magnetics/flux_loop[#]/position/#  ->  magnetics/flux_loop[#]/position
+  - '--mapping' restricts paths to those present in a mapping JSON file.
 """
 
 
 def cmd_paths(args: argparse.Namespace) -> int:
-    ctx = load_context(args.config, args.device, args.shot)
+    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
     helper = ctx.ids_helper(args.ids)
 
     lines: list[str] = []
@@ -51,13 +50,30 @@ def cmd_paths(args: argparse.Namespace) -> int:
 
 
 def cmd_map(args: argparse.Namespace) -> int:
-    ctx = load_context(args.config, args.device, args.shot)
-    selection = PathSelection(
-        ids=args.ids,
-        path=args.path,
-        match=args.match,
-        leaves_only=args.leaves_only,
-    )
+    if args.output is not None:
+        output_path = Path(args.output)
+        if output_path.suffix.lower() not in {".json", ".h5"}:
+            raise ValueError(
+                f"Unsupported output file extension for {output_path!s}. "
+                "Use no --output for terminal text, .json for JSON, or .h5 for HDF5."
+            )
+
+    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
+
+    mapping_keys = load_mapping_keys(Path(args.mapping)) if args.mapping else None
+
+    if args.path is not None:
+        selection: IdsSelection | SinglePathSelection = SinglePathSelection(
+            path=args.path,
+            mapping_keys=mapping_keys,
+        )
+    else:
+        selection = IdsSelection(
+            ids=args.ids,
+            match=args.match,
+            leaves_only=args.leaves_only,
+            mapping_keys=mapping_keys,
+        )
     records, summary = collect_mapped_values(
         ctx,
         selection,
@@ -80,15 +96,10 @@ def cmd_map(args: argparse.Namespace) -> int:
         print_summary(summary)
         return 1 if summary.has_unexpected_errors else 0
 
-    if suffix == ".h5":
-        write_h5_output(output_path, records=records, force=args.force)
-        print_summary(summary)
-        return 1 if summary.has_unexpected_errors else 0
-
-    raise ValueError(
-        f"Unsupported output file extension for {output_path!s}. "
-        "Use no --output for terminal text, .json for JSON, or .h5 for IDS output."
-    )
+    # suffix == ".h5" (already validated above)
+    write_h5_output(output_path, records=records, force=args.force)
+    print_summary(summary)
+    return 1 if summary.has_unexpected_errors else 0
 
 
 def cmd_init_config(args: argparse.Namespace) -> int:
@@ -113,7 +124,7 @@ def cmd_init_mapping(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    ctx = load_context(args.config, args.device, args.shot)
+    ctx = MappingContext.from_config(args.config, device=args.device, shot=args.shot)
     print("Config loaded successfully.")
     print(f"Device: {ctx.device}")
     print(f"Shot: {ctx.shot}")
@@ -232,7 +243,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=str,
         default=None,
-        help="Output destination. Default: terminal text. Use .json for JSON results or .h5 for IDS output.",
+        help="Output destination. Default: terminal text. Use .json for JSON results.",
+    )
+    parser_map.add_argument(
+        "--mapping",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Path to a mapping JSON file. Only IDS paths whose template form "
+            "appears as a key in the file will be mapped."
+        ),
     )
     parser_map.set_defaults(func=cmd_map)
 

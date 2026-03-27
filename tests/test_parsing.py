@@ -3,6 +3,7 @@ import pytest
 from tokamunch import (
     IDSNode,
     NodeType,
+    concrete_path_to_template,
     normalise_schema_segment,
     parse_schema_path,
     parse_concrete_path,
@@ -67,6 +68,23 @@ def test_render_array_length_query_path_for_root_array() -> None:
         IDSNode("profiles_1d", NodeType.ARRAY_STRUCT, None),
     ]
     assert render_array_length_query_path(nodes) == "core_profiles/profiles_1d"
+
+
+def test_concrete_path_to_template_replaces_indices() -> None:
+    assert (
+        concrete_path_to_template("magnetics/flux_loop[0]/position[2]/r")
+        == "magnetics/flux_loop[#]/position[#]/r"
+    )
+
+
+def test_concrete_path_to_template_no_arrays_unchanged() -> None:
+    assert concrete_path_to_template("magnetics/time") == "magnetics/time"
+
+
+def test_concrete_path_to_template_large_index() -> None:
+    assert concrete_path_to_template("core_profiles/profiles_1d[123]/density") == (
+        "core_profiles/profiles_1d[#]/density"
+    )
 
 
 def test_render_array_length_query_path_for_nested_array() -> None:

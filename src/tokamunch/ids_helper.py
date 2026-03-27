@@ -11,7 +11,7 @@ from .types import ExpansionContext, IDSNode, TrieNode
 class IDSHelper:
     def __init__(self, ids_paths: Iterable[str]):
         self._trie = build_ids_path_trie(ids_paths)
-        self.expansion_context = ExpansionContext()
+        self._expansion_context = ExpansionContext()
 
     @classmethod
     def from_ids_name(cls, ids_name: str) -> "IDSHelper":
@@ -23,7 +23,11 @@ class IDSHelper:
 
     @property
     def array_sizes(self) -> dict[str, int]:
-        return self.expansion_context.array_sizes
+        return self._expansion_context.array_sizes
+
+    def reset_expansion_cache(self) -> None:
+        """Discard all cached array-length results so the next expansion re-queries."""
+        self._expansion_context = ExpansionContext()
 
     def generate_non_concrete_paths(self, *, leaves_only: bool = False) -> Iterator[str]:
         yield from generate_schema_paths_from_trie(self._trie, leaves_only=leaves_only)
@@ -37,7 +41,7 @@ class IDSHelper:
         yield from expand_ids_path_trie_segments(
             self._trie,
             arraystruct_length_callback,
-            context=self.expansion_context,
+            context=self._expansion_context,
             leaves_only=leaves_only,
         )
 
@@ -50,6 +54,6 @@ class IDSHelper:
         yield from expand_ids_path_trie(
             self._trie,
             arraystruct_length_callback,
-            context=self.expansion_context,
+            context=self._expansion_context,
             leaves_only=leaves_only,
         )

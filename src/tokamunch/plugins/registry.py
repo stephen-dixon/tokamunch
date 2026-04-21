@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.metadata import entry_points
 
-from .plugin_api import DataSourceFactory
+from .api import DataSourceFactory
 
 
 def load_data_source_factory(name: str) -> DataSourceFactory:

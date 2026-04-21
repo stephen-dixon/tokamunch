@@ -1,3 +1,5 @@
+"""Core mapping execution: expand paths, dispatch to mapper, build records."""
+
 from __future__ import annotations
 
 import logging
@@ -7,17 +9,13 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-from .config import CLIConfig, ConcurrencyMode
-from .context import MappingContext
-from .data_source_interface import (
-    _MISSING_MAPPING_PREFIX,
-    TokamapInterface,
-    _decode_s1_bytes,
-)
-from .selection import Selection, generate_selected_paths
+from ..core.config import CLIConfig, ConcurrencyMode
+from .data_source import _MISSING_MAPPING_PREFIX, TokamapInterface, _decode_s1_bytes
 
 if TYPE_CHECKING:
-    from .profiling import ProfileData
+    from ..core.context import MappingContext
+    from ..core.profiling import ProfileData
+    from ..core.selection import Selection
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +74,7 @@ _worker_tokamap: TokamapInterface | None = None
 def _init_process_worker(cli_config: CLIConfig, device: str, shot: int | None) -> None:
     """Run once per worker process to build a process-local mapper from a CLIConfig."""
     global _worker_tokamap
-    from .mapper import create_mapper_from_config
+    from .mapper_factory import create_mapper_from_config
 
     mapper = create_mapper_from_config(cli_config)
     _worker_tokamap = TokamapInterface(mapper, device, shot=shot)
@@ -108,7 +106,7 @@ _RawResult: TypeAlias = tuple[str, Any, Exception | None]
 _ProgressCallback: TypeAlias = Callable[[int], None]
 
 
-def _map_serial(
+def map_serial(
     tokamap: TokamapInterface,
     paths: list[str],
     progress_callback: _ProgressCallback | None = None,
@@ -183,7 +181,7 @@ def _map_multiprocess(
 # ── record assembly ───────────────────────────────────────────────────────────
 
 
-def _build_records(
+def build_records(
     raw_results: list[_RawResult],
     *,
     verbose_errors: bool,
@@ -203,8 +201,6 @@ def _build_records(
             suppressed = not verbose_errors and should_suppress_mapping_error(exc)
             if suppressed:
                 summary.suppressed_errors += 1
-                # Log at DEBUG so a file sink or --log-level DEBUG exposes the
-                # full error message even when it is suppressed in text output.
                 logger.debug("Suppressed mapping error at %s: %s", ids_path, exc)
             else:
                 summary.unexpected_errors += 1
@@ -234,6 +230,8 @@ def collect_mapped_values(
     dry_run: bool = False,
     limit: int | None = None,
 ) -> tuple[list[MappingRecord], MappingSummary]:
+    from ..core.selection import generate_selected_paths
+
     if profile is not None:
         ctx.tokamap.profile = profile
 
@@ -257,7 +255,7 @@ def collect_mapped_values(
         if progress_callback is not None:
             for _ in paths:
                 progress_callback(1)
-        records, summary = _build_records(raw, verbose_errors=verbose_errors)
+        records, summary = build_records(raw, verbose_errors=verbose_errors)
         summary.elapsed_s = time.perf_counter() - t0
         return records, summary
 
@@ -268,7 +266,7 @@ def collect_mapped_values(
     )
     t_mapping = time.perf_counter()
     if concurrency.mode == ConcurrencyMode.SERIAL or concurrency.workers <= 1:
-        raw = _map_serial(ctx.tokamap, paths, progress_callback)
+        raw = map_serial(ctx.tokamap, paths, progress_callback)
     elif concurrency.mode == ConcurrencyMode.THREAD:
         raw = _map_threaded(ctx.tokamap, paths, concurrency.workers, progress_callback)
     elif concurrency.mode == ConcurrencyMode.PROCESS:
@@ -291,6 +289,6 @@ def collect_mapped_values(
     if profile is not None:
         profile.phases.mapping_s = time.perf_counter() - t_mapping
 
-    records, summary = _build_records(raw, verbose_errors=verbose_errors)
+    records, summary = build_records(raw, verbose_errors=verbose_errors)
     summary.elapsed_s = time.perf_counter() - t0
     return records, summary

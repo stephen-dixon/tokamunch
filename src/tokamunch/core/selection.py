@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import fnmatch
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, TypeAlias
+
+from ..ids.parsing import concrete_path_to_template
+
+if TYPE_CHECKING:
+    from .context import MappingContext
+
+
+@dataclass
+class IdsSelection:
+    """Expand all concrete paths for an IDS, with optional filtering."""
+
+    ids: str
+    match: str | None = None
+    leaves_only: bool = False
+    mapping_keys: frozenset[str] | None = field(default=None)
+
+
+@dataclass
+class SinglePathSelection:
+    """Map a single known concrete path."""
+
+    path: str
+    mapping_keys: frozenset[str] | None = field(default=None)
+
+
+@dataclass
+class MultiPathSelection:
+    """Map an explicit list of concrete paths."""
+
+    paths: list[str]
+    mapping_keys: frozenset[str] | None = field(default=None)
+
+
+# Public type alias — callers use this for annotations.
+Selection: TypeAlias = IdsSelection | SinglePathSelection | MultiPathSelection
+
+
+def path_matches(ids_path: str, pattern: str | None) -> bool:
+    return pattern is None or fnmatch.fnmatch(ids_path, pattern)
+
+
+def _included(
+    ids_path: str,
+    *,
+    match: str | None,
+    mapping_keys: frozenset[str] | None,
+) -> bool:
+    return path_matches(ids_path, match) and (
+        mapping_keys is None or concrete_path_to_template(ids_path) in mapping_keys
+    )
+
+
+def generate_selected_paths(selection: Selection, ctx: MappingContext) -> Iterator[str]:
+    if isinstance(selection, SinglePathSelection):
+        if _included(selection.path, match=None, mapping_keys=selection.mapping_keys):
+            yield selection.path
+        return
+
+    if isinstance(selection, MultiPathSelection):
+        for path in selection.paths:
+            if _included(path, match=None, mapping_keys=selection.mapping_keys):
+                yield path
+        return
+
+    helper = ctx.ids_helper(selection.ids)
+    for ids_path in helper.generate_concrete_paths(
+        ctx.tokamap.get_array_length,
+        leaves_only=selection.leaves_only,
+    ):
+        if _included(
+            ids_path, match=selection.match, mapping_keys=selection.mapping_keys
+        ):
+            yield ids_path

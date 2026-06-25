@@ -111,3 +111,7 @@ strict = true
 ignore_missing_imports = true  # libtokamap, imas_data_dictionary have no stubs
 # mypy is enforced on src/ only; tests use untyped helpers and structural fakes.
 exclude = ["^tests/"]
+
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"

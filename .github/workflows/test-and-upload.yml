@@ -103,7 +103,7 @@ jobs:
     needs: build
     if: |
       (github.event_name == 'push' && (
-        github.ref == 'refs/heads/dev' ||
+        github.ref == 'refs/heads/develop' ||
         startsWith(github.ref, 'refs/heads/release/')
       )) ||
       (github.event_name == 'pull_request' && github.base_ref == 'main')

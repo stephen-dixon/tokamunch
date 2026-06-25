@@ -13,24 +13,30 @@ class MapperProtocol(Protocol):
     def map(self, device: str, ids_path: str, args: dict[str, Any]) -> Any: ...
 
 
-class DataSource(Protocol):
-    """
-    Protocol for data source objects registered with the mapper.
+class PythonDataSourceProtocol(Protocol):
+    """Protocol for Python data source objects registered with libtokamap.
 
-    The return type of map() is intentionally untyped (Any) to avoid
-    introducing a numpy dependency solely for the type hint — callers
-    should expect numpy arrays, scalars, or None.
+    libtokamap calls ``get(kwargs)`` on the registered Python object — passing
+    all ``DataSourceArgs`` entries as a plain ``dict``.  Plugin implementations
+    must satisfy this interface.
+
+    The return type is intentionally ``Any``; callers should expect numpy
+    arrays, scalars, or ``None``.
     """
 
-    def map(self, device: str, ids_path: str, args: dict[str, Any]) -> Any: ...
+    def get(self, args: dict[str, Any]) -> Any: ...
+
+
+# Backward-compatible alias — prefer PythonDataSourceProtocol in new code.
+DataSource = PythonDataSourceProtocol
 
 
 class DataSourceFactory(Protocol):
-    """
-    Protocol for entry-point data-source factories.
+    """Protocol for entry-point data-source factories.
 
-    A factory receives plugin-specific configuration args and returns
-    an object suitable for mapper.register_python_data_source(...).
+    A factory receives plugin-specific configuration args and returns a
+    ``PythonDataSourceProtocol``-compatible object suitable for
+    ``mapper.register_python_data_source(...)``.
     """
 
-    def __call__(self, args: dict[str, Any]) -> DataSource: ...
+    def __call__(self, config: dict[str, Any]) -> PythonDataSourceProtocol: ...

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import tempfile
 from typing import Any
 
 import libtokamap
 
-from ..core.config import CLIConfig
-from ..plugins.registry import load_data_source_factory
+from ..core.config import CLIConfig, ConcurrencyMode
+from ..plugins.registry import load_plugin
+
+logger = logging.getLogger(__name__)
 
 
 def _create_libtokamap_mapper(
@@ -44,13 +47,26 @@ def create_mapper_from_config(config: CLIConfig) -> libtokamap.Mapper:
         config.mapper.config, config.mapper.config_params
     )
 
+    concurrency_mode = config.run.concurrency.mode
+
     for ds in config.data_sources:
         if not ds.enabled:
             continue
 
-        factory = load_data_source_factory(ds.plugin)
-        data_source = factory(ds.args)
+        plugin = load_plugin(ds.plugin)
 
+        if (
+            concurrency_mode == ConcurrencyMode.THREAD
+            and not plugin.metadata.thread_safe
+        ):
+            logger.warning(
+                "Plugin %r is not thread-safe but thread concurrency is enabled. "
+                "Consider switching to 'process' concurrency mode or verify that "
+                "the plugin is safe to use across threads.",
+                ds.plugin,
+            )
+
+        data_source = plugin.factory(ds.args)
         mapper.register_python_data_source(ds.mapper_name, data_source)
 
     return mapper

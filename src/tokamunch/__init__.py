@@ -61,7 +61,14 @@ from .io.diff import diff_files, diff_records
 from .mapping.data_source import TokamapInterface
 from .mapping.mapper_factory import create_mapper_from_config
 from .mapping.runner import collect_mapped_values
-from .plugins.api import DataSource, DataSourceFactory, MapperProtocol
+from .plugins.api import (
+    DataSource,
+    DataSourceFactory,
+    MapperProtocol,
+    PythonDataSourceProtocol,
+)
+from .plugins.metadata import DataSourceMetadata
+from .plugins.registry import LoadedPlugin, load_plugin
 from .types import ExpansionContext, IDSNode, NodeType, TrieNode, WriteContext
 
 __all__ = [
@@ -71,15 +78,18 @@ __all__ = [
     "DataSource",
     "DataSourceConfig",
     "DataSourceFactory",
+    "DataSourceMetadata",
     "ExpansionContext",
     "IDSHelper",
     "IDSNode",
     "IdsSelection",
+    "LoadedPlugin",
     "MapperConfig",
     "MapperProtocol",
     "MappingContext",
     "MultiPathSelection",
     "NodeType",
+    "PythonDataSourceProtocol",
     "RunConfig",
     "Selection",
     "SinglePathSelection",
@@ -102,6 +112,7 @@ __all__ = [
     "generate_schema_paths_from_trie",
     "load_cli_config",
     "load_mapping_keys",
+    "load_plugin",
     "merge_mapping_stubs",
     "normalise_schema_segment",
     "parse_concrete_path",

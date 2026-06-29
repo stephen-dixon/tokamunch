@@ -16,9 +16,10 @@ class MapperProtocol(Protocol):
 class PythonDataSourceProtocol(Protocol):
     """Protocol for Python data source objects registered with libtokamap.
 
-    libtokamap calls ``get(kwargs)`` on the registered Python object — passing
-    all ``DataSourceArgs`` entries as a plain ``dict``.  Plugin implementations
-    must satisfy this interface.
+    libtokamap calls ``get(kwargs)`` on the registered Python object, passing a
+    plain ``dict``.  The dict contains the mapping's ``DataSourceArgs`` plus
+    primitive runtime attributes supplied to ``Mapper.map(...)`` when the
+    mapping did not already define the same key.
 
     The return type is intentionally ``Any``; callers should expect numpy
     arrays, scalars, or ``None``.

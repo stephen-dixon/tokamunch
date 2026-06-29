@@ -222,7 +222,10 @@ munchi completions fish > ~/.config/fish/completions/munchi.fish
 
 Tokamunch plugins must implement the **libtokamap Python datasource interface**: a
 class with a `get(args)` method.  libtokamap calls `get` with a `dict` containing
-the `DataSourceArgs` entries (e.g. `shot`, custom args from your mapping file).
+the mapping's `DataSourceArgs` plus primitive runtime attributes supplied to
+`Mapper.map(...)` when the mapping did not already define the same key.  In
+normal tokamunch runs this includes `shot`, and may include custom runtime args
+passed when constructing `TokamapInterface`.
 
 ### Plugin structure
 

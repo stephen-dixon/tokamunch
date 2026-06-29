@@ -23,6 +23,26 @@ def test_tokamap_interface_map_passes_args() -> None:
     assert mapper.calls == [("mastu", "a/b", {"shot": 47125})]
 
 
+def test_tokamap_interface_map_passes_runtime_args_for_data_sources() -> None:
+    mapper = FakeMapper({"a/b": np.array([1, 2, 3])})
+    iface = TokamapInterface(
+        mapper,
+        "mastu",
+        shot=47125,
+        extra_args={"run": "analysis", "time_index": 2},
+    )
+
+    iface.map("a/b")
+
+    assert mapper.calls == [
+        (
+            "mastu",
+            "a/b",
+            {"run": "analysis", "time_index": 2, "shot": 47125},
+        )
+    ]
+
+
 def test_tokamap_interface_get_array_length_records_scalar() -> None:
     mapper = FakeMapper({"a/b": np.array(5)})
     iface = TokamapInterface(mapper, "mastu", shot=47125)

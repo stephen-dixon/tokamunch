@@ -25,9 +25,7 @@ def format_value(value: Any) -> str:
         try:
             import numpy as np
 
-            mn = np.min(value)
-            mx = np.max(value)
-            stats = f" min={mn:.4g} max={mx:.4g}"
+            stats = f" min={np.min(value):.4g} max={np.max(value):.4g}"
         except (TypeError, ValueError):
             stats = ""
         # First 3 elements

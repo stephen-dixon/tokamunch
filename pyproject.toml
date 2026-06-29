@@ -106,7 +106,7 @@ ignore = [
 "tests/*" = ["N802", "N803"] # allow non-lowercase function/arg names in tests
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 strict = true
 ignore_missing_imports = true  # libtokamap, imas_data_dictionary have no stubs
 # mypy is enforced on src/ only; tests use untyped helpers and structural fakes.

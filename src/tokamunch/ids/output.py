@@ -59,6 +59,16 @@ def group_records_by_ids(records: list[Any]) -> dict[str, list[Any]]:
     return groups
 
 
+def _format_failed_value(value: Any) -> str:
+    """Return a bounded value preview for IDS write diagnostics."""
+    if hasattr(value, "dtype") and hasattr(value, "shape"):
+        return f"<array dtype={value.dtype} shape={value.shape}>"
+    text = repr(value)
+    if len(text) > 500:
+        return text[:497] + "..."
+    return text
+
+
 def populate_ids(
     ids_obj: Any,
     records: list[Any],
@@ -81,20 +91,31 @@ def populate_ids(
         array_sizes = _derive_array_sizes([r.ids_path for r in records])
     ctx = WriteContext()
     for record in records:
-        segs = list(parse_concrete_path(record.ids_path))
-        if segs and segs[-1].node_type is NodeType.ARRAY_STRUCT:
-            ensure_ids_arrays_resized(
-                ids_obj, segs, array_sizes, write_context=ctx, skip_root_segment=True
-            )
-        else:
-            resize_and_set_ids_value(
-                ids_obj,
-                segs,
-                record.value,
-                array_sizes,
-                write_context=ctx,
-                skip_root_segment=True,
-            )
+        try:
+            segs = list(parse_concrete_path(record.ids_path))
+            if segs and segs[-1].node_type is NodeType.ARRAY_STRUCT:
+                ensure_ids_arrays_resized(
+                    ids_obj,
+                    segs,
+                    array_sizes,
+                    write_context=ctx,
+                    skip_root_segment=True,
+                )
+            else:
+                resize_and_set_ids_value(
+                    ids_obj,
+                    segs,
+                    record.value,
+                    array_sizes,
+                    write_context=ctx,
+                    skip_root_segment=True,
+                )
+        except Exception as exc:
+            value_preview = _format_failed_value(record.value)
+            raise RuntimeError(
+                f"Failed to populate IDS path {record.ids_path!r} "
+                f"with mapped value {value_preview}: {exc}"
+            ) from exc
 
 
 def imas_uri(path: Path) -> str:

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from tokamunch.mapping import MappingRecord
 from tokamunch.write_ids import _populate_ids
 
@@ -42,6 +46,25 @@ class FakeEquilibrium:
     def __init__(self) -> None:
         self.time_slice = FakeAoS()
         self.time: list[float] = []
+
+
+class FakeTypedEquilibrium:
+    """Fake top-level IDS with a typed scalar setter."""
+
+    def __init__(self) -> None:
+        self._ids_properties_homogeneous_time: int | None = None
+
+    @property
+    def ids_properties(self) -> Any:
+        return self
+
+    @property
+    def homogeneous_time(self) -> int | None:
+        return self._ids_properties_homogeneous_time
+
+    @homogeneous_time.setter
+    def homogeneous_time(self, value: object) -> None:
+        self._ids_properties_homogeneous_time = int(value)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -117,3 +140,17 @@ class TestPopulateIdsArrayStructNodes:
         _populate_ids(ids, records)
 
         assert ids.time_slice.resize_calls == [1]
+
+    def test_assignment_error_includes_path_and_value(self) -> None:
+        ids = FakeTypedEquilibrium()
+        records = [
+            _ok("equilibrium/ids_properties/homogeneous_time", "<INSERT>"),
+        ]
+
+        with pytest.raises(RuntimeError) as excinfo:
+            _populate_ids(ids, records)
+
+        msg = str(excinfo.value)
+        assert "equilibrium/ids_properties/homogeneous_time" in msg
+        assert "'<INSERT>'" in msg
+        assert "invalid literal for int()" in msg

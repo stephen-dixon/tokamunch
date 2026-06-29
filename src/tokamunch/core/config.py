@@ -8,7 +8,7 @@ from typing import Any
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore[no-redef]
 
 
 class ConcurrencyMode(str, Enum):

@@ -26,6 +26,7 @@ dependencies = [
     "imas_data_dictionary",
     "imas-python[netcdf]",
     "tqdm",
+    "tomli>=2; python_version < '3.11'",
     # "numpy",
     # "pyuda" # temporarily for testing...
 ]

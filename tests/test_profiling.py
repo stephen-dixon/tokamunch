@@ -1,10 +1,10 @@
-"""Tests for tokamunch.profiling — call-stats and report rendering."""
+"""Tests for tokamunch.core.profiling — call-stats and report rendering."""
 
 from __future__ import annotations
 
 import threading
 
-from tokamunch.profiling import (
+from tokamunch.core.profiling import (
     CallStats,
     ProfileData,
     render_profile_report,

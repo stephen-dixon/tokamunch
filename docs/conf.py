@@ -15,7 +15,13 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinxarg.ext",
+    "myst_parser",
 ]
+
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build"]

@@ -2,12 +2,12 @@ import base64
 
 import numpy as np
 
-from tokamunch.mapping import MappingRecord
-from tokamunch.outputs import (
+from tokamunch.io.outputs import (
     build_json_results,
     make_json_safe,
     render_text_records,
 )
+from tokamunch.mapping import MappingRecord
 
 
 class TestMakeJsonSafe:
@@ -161,17 +161,17 @@ class TestRenderTextRecords:
         assert "a/b" in output
 
 
-# ── _format_value ─────────────────────────────────────────────────────────────
+# ── format_value ─────────────────────────────────────────────────────────────
 
 
 class TestFormatValue:
     def test_1d_numpy_array_shows_stats(self) -> None:
         import numpy as np
 
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
         arr = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        out = _format_value(arr)
+        out = format_value(arr)
         assert "float64" in out
         assert "min=" in out
         assert "max=" in out
@@ -179,10 +179,10 @@ class TestFormatValue:
     def test_1d_numpy_array_shows_first_three(self) -> None:
         import numpy as np
 
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
         arr = np.array([10.0, 20.0, 30.0, 40.0])
-        out = _format_value(arr)
+        out = format_value(arr)
         assert "10" in out
         assert "20" in out
         assert "30" in out
@@ -191,51 +191,51 @@ class TestFormatValue:
     def test_numpy_array_shape_in_output(self) -> None:
         import numpy as np
 
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
         arr = np.ones((3, 4))
-        out = _format_value(arr)
+        out = format_value(arr)
         assert "3" in out and "4" in out
 
     def test_integer_numpy_array(self) -> None:
         import numpy as np
 
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
         arr = np.array([1, 2, 3], dtype=np.int32)
-        out = _format_value(arr)
+        out = format_value(arr)
         assert "int32" in out
 
     def test_short_numpy_array_no_ellipsis(self) -> None:
         import numpy as np
 
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
         arr = np.array([1.0, 2.0])
-        out = _format_value(arr)
+        out = format_value(arr)
         assert "..." not in out
 
     def test_plain_string_passthrough(self) -> None:
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
-        assert _format_value("hello") == "hello"
+        assert format_value("hello") == "hello"
 
     def test_scalar_passthrough(self) -> None:
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
-        assert _format_value(42) == "42"
+        assert format_value(42) == "42"
 
     def test_large_python_list_truncated(self) -> None:
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
-        out = _format_value(list(range(10)))
+        out = format_value(list(range(10)))
         assert "..." in out
         assert "10" in out  # count shown
 
     def test_short_python_list_not_truncated(self) -> None:
-        from tokamunch.outputs import _format_value
+        from tokamunch.io.outputs import format_value
 
-        out = _format_value([1, 2, 3])
+        out = format_value([1, 2, 3])
         assert "..." not in out
 
 
@@ -244,8 +244,8 @@ class TestFormatValue:
 
 class TestRenderVerboseRecords:
     def test_successful_record_shows_path_and_value(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [MappingRecord(ids_path="a/b", value=42.0)]
         out = render_verbose_records(records, verbose_errors=False)
@@ -253,23 +253,23 @@ class TestRenderVerboseRecords:
         assert "42" in out
 
     def test_value_on_indented_line(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [MappingRecord(ids_path="a/b", value=1.0)]
         lines = render_verbose_records(records, verbose_errors=False).splitlines()
         assert any(ln.startswith("  ") and "value" in ln for ln in lines)
 
     def test_none_value_not_shown(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [MappingRecord(ids_path="a/b", value=None)]
         assert render_verbose_records(records, verbose_errors=False) == ""
 
     def test_error_shown_when_verbose(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [
             MappingRecord(ids_path="a/b", error=RuntimeError("bad"), suppressed=False)
@@ -278,8 +278,8 @@ class TestRenderVerboseRecords:
         assert "a/b" in out
 
     def test_suppressed_error_hidden_when_not_verbose(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [
             MappingRecord(ids_path="a/b", error=RuntimeError("x"), suppressed=True)
@@ -287,8 +287,8 @@ class TestRenderVerboseRecords:
         assert render_verbose_records(records, verbose_errors=False) == ""
 
     def test_suppressed_error_shown_when_verbose(self) -> None:
+        from tokamunch.io.outputs import render_verbose_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_verbose_records
 
         records = [
             MappingRecord(ids_path="a/b", error=RuntimeError("x"), suppressed=True)
@@ -297,15 +297,15 @@ class TestRenderVerboseRecords:
         assert "a/b" in out
 
 
-# ── render_text_records uses _format_value ────────────────────────────────────
+# ── render_text_records uses format_value ────────────────────────────────────
 
 
 class TestRenderTextRecordsWithStats:
     def test_numpy_array_shows_dtype_not_raw_repr(self) -> None:
         import numpy as np
 
+        from tokamunch.io.outputs import render_text_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_text_records
 
         arr = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         records = [MappingRecord(ids_path="a/b", value=arr)]
@@ -316,8 +316,8 @@ class TestRenderTextRecordsWithStats:
         assert "array(" not in out
 
     def test_scalar_value_works_normally(self) -> None:
+        from tokamunch.io.outputs import render_text_records
         from tokamunch.mapping import MappingRecord
-        from tokamunch.outputs import render_text_records
 
         records = [MappingRecord(ids_path="a/b", value=3.14)]
         out = render_text_records(records, verbose_errors=False)

@@ -218,6 +218,82 @@ munchi completions fish > ~/.config/fish/completions/munchi.fish
 
 ---
 
+## Writing a data-source plugin
+
+Tokamunch plugins must implement the **libtokamap Python datasource interface**: a
+class with a `get(args)` method.  libtokamap calls `get` with a `dict` containing
+the mapping's `DataSourceArgs` plus primitive runtime attributes supplied to
+`Mapper.map(...)` when the mapping did not already define the same key.  In
+normal tokamunch runs this includes `shot`, and may include custom runtime args
+passed when constructing `TokamapInterface`.
+
+### Plugin structure
+
+#### 1. Implement the data source
+
+```python
+# my_package/datasource.py
+from __future__ import annotations
+from typing import Any
+import numpy as np
+
+from tokamunch.plugins import DataSourceMetadata
+
+# Optional — declare execution safety and operational hints.
+PLUGIN_METADATA = DataSourceMetadata(
+    name="my_source",
+    display_name="My Data Source",
+    version="1.0.0",
+    description="Reads signals from My Device.",
+    thread_safe=False,   # set True only if your backend is thread-safe
+    process_safe=True,
+    requires_network=True,
+)
+
+class MyDataSource:
+    def __init__(self, host: str) -> None:
+        self._host = host
+
+    def get(self, args: dict[str, Any]) -> Any:
+        """Called by libtokamap for each IDS path."""
+        shot = args["shot"]
+        signal = args.get("signal_name", "unknown")
+        # ... fetch and return a numpy array or scalar ...
+        return np.array([1.0, 2.0, 3.0])
+
+def factory(config: dict[str, Any]) -> MyDataSource:
+    return MyDataSource(host=config.get("host", "localhost"))
+```
+
+#### 2. Register the entry point
+
+```toml
+# pyproject.toml
+[project.entry-points."tokamunch.data_sources"]
+my_source = "my_package.datasource:factory"
+```
+
+#### 3. Declare the plugin in `munchi.toml`
+
+```toml
+[[data_sources]]
+mapper_name = "my_source"   # name used in libtokamap mapping files
+plugin      = "my_source"   # matches the entry-point name
+enabled     = true
+
+[data_sources.args]
+host = "my-device-server"
+```
+
+### Concurrency safety
+
+tokamunch will emit a **warning** at mapper creation time if your plugin's
+`PLUGIN_METADATA.thread_safe` is `False` and the user has configured
+`run.concurrency.mode = "thread"`.  Use `mode = "process"` for plugins that
+are not thread-safe (e.g. those wrapping C extensions with global state).
+
+---
+
 ## Development
 
 ```bash

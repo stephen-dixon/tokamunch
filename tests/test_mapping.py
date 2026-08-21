@@ -1,9 +1,9 @@
-from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
 from tokamunch.mapping import (
-    _build_records,
+    build_records,
     normalise_map_result,
     should_suppress_mapping_error,
 )
+from tokamunch.mapping.data_source import _MISSING_MAPPING_PREFIX
 
 
 class TestNormaliseMapResult:
@@ -49,7 +49,7 @@ class TestShouldSuppressMappingError:
 class TestBuildRecords:
     def test_successful_mapping(self) -> None:
         raw = [("a/b", 42, None)]
-        records, summary = _build_records(raw, verbose_errors=False)
+        records, summary = build_records(raw, verbose_errors=False)
 
         assert len(records) == 1
         assert records[0].ids_path == "a/b"
@@ -60,7 +60,7 @@ class TestBuildRecords:
 
     def test_none_value(self) -> None:
         raw = [("a/b", None, None)]
-        records, summary = _build_records(raw, verbose_errors=False)
+        records, summary = build_records(raw, verbose_errors=False)
 
         assert records[0].value is None
         assert records[0].ok is True
@@ -70,7 +70,7 @@ class TestBuildRecords:
     def test_suppressed_error(self) -> None:
         exc = RuntimeError(f"{_MISSING_MAPPING_PREFIX} a/b")
         raw = [("a/b", None, exc)]
-        records, summary = _build_records(raw, verbose_errors=False)
+        records, summary = build_records(raw, verbose_errors=False)
 
         assert records[0].suppressed is True
         assert summary.suppressed_errors == 1
@@ -79,7 +79,7 @@ class TestBuildRecords:
     def test_suppressed_error_shown_when_verbose(self) -> None:
         exc = RuntimeError(f"{_MISSING_MAPPING_PREFIX} a/b")
         raw = [("a/b", None, exc)]
-        records, summary = _build_records(raw, verbose_errors=True)
+        records, summary = build_records(raw, verbose_errors=True)
 
         assert records[0].suppressed is False
         assert summary.suppressed_errors == 0
@@ -88,7 +88,7 @@ class TestBuildRecords:
     def test_unexpected_error(self) -> None:
         exc = RuntimeError("network timeout")
         raw = [("a/b", None, exc)]
-        records, summary = _build_records(raw, verbose_errors=False)
+        records, summary = build_records(raw, verbose_errors=False)
 
         assert records[0].suppressed is False
         assert records[0].error is exc
@@ -102,7 +102,7 @@ class TestBuildRecords:
             ("c/d", None, suppressed_exc),
             ("d/e", None, RuntimeError("boom")),
         ]
-        _records, summary = _build_records(raw, verbose_errors=False)
+        _records, summary = build_records(raw, verbose_errors=False)
 
         assert summary.total_paths == 4
         assert summary.mapped == 1

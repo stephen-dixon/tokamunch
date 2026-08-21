@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tokamunch.config import (
+from tokamunch.core.config import (
     CLIConfig,
     ConcurrencyMode,
     MapperConfig,
@@ -404,7 +404,7 @@ class TestApplyConfigOverrides:
         assert cfg.mapper.device == "mast"
 
     def test_data_sources_preserved(self) -> None:
-        from tokamunch.config import DataSourceConfig
+        from tokamunch.core.config import DataSourceConfig
 
         cfg = _base_cfg()
         cfg = CLIConfig(

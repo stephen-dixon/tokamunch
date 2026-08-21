@@ -3,8 +3,8 @@
 from typing import Any
 
 import tokamunch as tm
+from tokamunch.core.selection import IdsSelection, SinglePathSelection
 from tokamunch.mapping import collect_mapped_values
-from tokamunch.selection import IdsSelection, SinglePathSelection
 
 IDSHelper = tm.IDSHelper
 

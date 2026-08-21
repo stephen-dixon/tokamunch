@@ -5,6 +5,11 @@ device = "mastu"
 [run]
 default_shot = 47125
 
+[run.concurrency]
+# mode = "serial"
+mode = "process"
+workers = 8
+
 [data_sources.UDA]
 plugin = "tokamunch_pyuda_datasource"
 # plugin = "pyuda"
@@ -18,5 +23,6 @@ args.plugin_name = "UDA"
 plugin = "tokamunch_pyuda_datasource"
 # plugin = "pyuda"
 args.host = "uda2.hpc.l"
-args.port = 56565
+args.port = 59876
+# args.port = 56565
 args.plugin_name = "GEOMETRY"

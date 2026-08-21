@@ -51,7 +51,7 @@ def test_tokamap_interface_get_array_length_records_scalar() -> None:
 
 
 def test_tokamap_interface_get_array_length_returns_zero_on_missing_mapping() -> None:
-    from tokamunch.data_source_interface import _MISSING_MAPPING_PREFIX
+    from tokamunch.mapping.data_source import _MISSING_MAPPING_PREFIX
 
     class MissingMappingMapper:
         def map(self, device, ids_path, args):

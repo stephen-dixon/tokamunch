@@ -1,10 +1,10 @@
-"""Tests for tokamunch.diff — record comparison utilities."""
+"""Tests for tokamunch.io.diff — record comparison utilities."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from tokamunch.diff import DiffEntry, diff_records, render_diff
+from tokamunch.io.diff import DiffEntry, diff_records, render_diff
 from tokamunch.mapping import MappingRecord
 
 

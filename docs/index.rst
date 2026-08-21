@@ -24,3 +24,4 @@ files, and validating configuration.
    :caption: Library reference
 
    api
+   architecture

@@ -1,4 +1,4 @@
-"""Tests for tokamunch.convert — format conversion utilities."""
+"""Tests for tokamunch.io.convert — format conversion utilities."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from tokamunch.convert import (
+from tokamunch.io.convert import (
     _get_ids_leaf_value,
     _ids_length_callback,
     _is_empty_imas_value,
@@ -265,7 +265,7 @@ class TestRecordsToIdsObjects:
         records = [MappingRecord(ids_path="magnetics/time", value=[0.1, 0.2])]
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
-            from tokamunch.convert import records_to_ids_objects
+            from tokamunch.io.convert import records_to_ids_objects
 
             result = records_to_ids_objects(records)
 
@@ -285,21 +285,21 @@ class TestRecordsToIdsObjects:
         ]
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
-            from tokamunch.convert import records_to_ids_objects
+            from tokamunch.io.convert import records_to_ids_objects
 
             result = records_to_ids_objects(records)
 
         assert set(result.keys()) == {"magnetics", "equilibrium"}
 
     def test_skips_error_records(self) -> None:
-        """Error records are excluded by _group_records_by_ids."""
+        """Error records are excluded by group_records_by_ids."""
         mock_imas = _make_imas_mock({})
         records = [
             MappingRecord(ids_path="magnetics/time", error=RuntimeError("oops")),
         ]
 
         with patch.dict("sys.modules", {"imas": mock_imas}):
-            from tokamunch.convert import records_to_ids_objects
+            from tokamunch.io.convert import records_to_ids_objects
 
             result = records_to_ids_objects(records)
 
@@ -338,7 +338,7 @@ class TestWriteImasOutputErrorRecovery:
     """
 
     def test_returns_empty_list_on_success(self, tmp_path: Path) -> None:
-        from tokamunch.write_ids import write_imas_output
+        from tokamunch.ids.output import write_imas_output
 
         records = [
             MappingRecord(ids_path="magnetics/time", value=[0.1]),
@@ -357,7 +357,7 @@ class TestWriteImasOutputErrorRecovery:
         assert errors == []
 
     def test_returns_ids_write_error_on_put_failure(self, tmp_path: Path) -> None:
-        from tokamunch.write_ids import IdsWriteError, write_imas_output
+        from tokamunch.ids.output import IdsWriteError, write_imas_output
 
         records = [MappingRecord(ids_path="magnetics/time", value=[0.1])]
         dbentry = _make_dbentry_mock()
@@ -375,7 +375,7 @@ class TestWriteImasOutputErrorRecovery:
         assert "not valid" in str(errors[0].cause)
 
     def test_failed_ids_records_preserved_in_error(self, tmp_path: Path) -> None:
-        from tokamunch.write_ids import write_imas_output
+        from tokamunch.ids.output import write_imas_output
 
         records = [MappingRecord(ids_path="magnetics/time", value=[0.1])]
         dbentry = _make_dbentry_mock()
@@ -391,7 +391,7 @@ class TestWriteImasOutputErrorRecovery:
 
     def test_other_ids_still_written_after_failure(self, tmp_path: Path) -> None:
         """A failure writing one IDS must not prevent writing others."""
-        from tokamunch.write_ids import write_imas_output
+        from tokamunch.ids.output import write_imas_output
 
         records = [
             MappingRecord(ids_path="magnetics/time", value=[0.1]),

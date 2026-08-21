@@ -1,5 +1,5 @@
 from tokamunch import IDSHelper
-from tokamunch.selection import (
+from tokamunch.core.selection import (
     IdsSelection,
     MultiPathSelection,
     SinglePathSelection,

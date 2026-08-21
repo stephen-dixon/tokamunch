@@ -7,7 +7,7 @@ name = "tokamunch"
 dynamic = ["version"]
 description = "IMAS utility functions for generating IDS mappings using libtokamap"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 
 authors = [
@@ -17,6 +17,9 @@ authors = [
 keywords = ["tokamap", "libtokamap", "IMAS", "IDS", "mappings"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: MIT License"
 ]
@@ -26,6 +29,8 @@ dependencies = [
     "imas_data_dictionary",
     "imas-python[netcdf]",
     "tqdm",
+    # Retained fallback for the tomllib import in core/config.py. Inert while
+    # requires-python is >=3.13; kept so a lower floor stays a one-line change.
     "tomli>=2; python_version < '3.11'",
     # "numpy",
     # "pyuda" # temporarily for testing...
@@ -46,6 +51,7 @@ docs = [
   "sphinx>=8",
   "furo>=2024.8.6",
   "sphinx-argparse>=0.5.2",
+  "myst-parser>=4",
   "tomli>=2; python_version < '3.11'",
 ]
 

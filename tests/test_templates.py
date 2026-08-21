@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from tokamunch import IDSHelper
-from tokamunch.templates import _to_template_path, load_mapping_keys
+from tokamunch.ids.templates import _to_template_path, load_mapping_keys
 
 
 class TestToTemplatePath:
@@ -94,44 +94,44 @@ class TestLoadMappingKeys:
 
 class TestIsCommentStub:
     def test_comment_dict_is_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub({"comment": "some description"}) is True
 
     def test_empty_comment_is_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub({"comment": ""}) is True
 
     def test_comment_with_metadata_is_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert (
             is_comment_stub({"comment": "desc", "units": "T", "source": "UDA"}) is True
         )
 
     def test_dict_without_comment_is_not_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub({"mapping": "some_expression"}) is False
 
     def test_empty_dict_is_not_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub({}) is False
 
     def test_plain_string_is_not_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub("some_expression") is False
 
     def test_none_is_not_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         assert is_comment_stub(None) is False
 
     def test_comment_with_extra_key_is_not_stub(self) -> None:
-        from tokamunch.templates import is_comment_stub
+        from tokamunch.ids.templates import is_comment_stub
 
         # "expression" is not an allowed metadata key
         assert (
@@ -144,7 +144,10 @@ class TestIsCommentStub:
 
 class TestBuildBlankMappingTemplateStubs:
     def test_values_are_comment_stubs(self) -> None:
-        from tokamunch.templates import build_blank_mapping_template, is_comment_stub
+        from tokamunch.ids.templates import (
+            build_blank_mapping_template,
+            is_comment_stub,
+        )
 
         template = build_blank_mapping_template("magnetics", leaves_only=True)
         assert len(template) > 0
@@ -152,7 +155,7 @@ class TestBuildBlankMappingTemplateStubs:
             assert is_comment_stub(value), f"Expected stub, got {value!r}"
 
     def test_comment_is_populated_from_data_dictionary(self) -> None:
-        from tokamunch.templates import build_blank_mapping_template
+        from tokamunch.ids.templates import build_blank_mapping_template
 
         template = build_blank_mapping_template("magnetics", leaves_only=True)
         for value in template.values():
@@ -166,7 +169,7 @@ class TestBuildBlankMappingTemplateStubs:
 
 class TestMergeMappingStubs:
     def test_existing_entries_preserved(self, tmp_path: Path) -> None:
-        from tokamunch.templates import merge_mapping_stubs
+        from tokamunch.ids.templates import merge_mapping_stubs
 
         existing = {
             "magnetics/time": "UDA:time",
@@ -179,7 +182,7 @@ class TestMergeMappingStubs:
         assert merged["magnetics/flux_loop[#]/psi"] == {"comment": "my note"}
 
     def test_new_paths_added_as_stubs(self, tmp_path: Path) -> None:
-        from tokamunch.templates import is_comment_stub, merge_mapping_stubs
+        from tokamunch.ids.templates import is_comment_stub, merge_mapping_stubs
 
         existing = {"magnetics/time": "UDA:time"}
         f = tmp_path / "m.json"
@@ -195,7 +198,7 @@ class TestMergeMappingStubs:
                 ), f"Expected stub for new key {key!r}, got {val!r}"
 
     def test_existing_path_not_overwritten(self, tmp_path: Path) -> None:
-        from tokamunch.templates import merge_mapping_stubs
+        from tokamunch.ids.templates import merge_mapping_stubs
 
         existing = {"magnetics/time": "my_custom_expression"}
         f = tmp_path / "m.json"
@@ -204,7 +207,7 @@ class TestMergeMappingStubs:
         assert merged["magnetics/time"] == "my_custom_expression"
 
     def test_result_contains_more_keys_than_existing(self, tmp_path: Path) -> None:
-        from tokamunch.templates import merge_mapping_stubs
+        from tokamunch.ids.templates import merge_mapping_stubs
 
         existing = {"magnetics/time": "UDA:time"}
         f = tmp_path / "m.json"
@@ -213,7 +216,7 @@ class TestMergeMappingStubs:
         assert len(merged) > len(existing)
 
     def test_raises_on_non_object_json(self, tmp_path: Path) -> None:
-        from tokamunch.templates import merge_mapping_stubs
+        from tokamunch.ids.templates import merge_mapping_stubs
 
         f = tmp_path / "bad.json"
         f.write_text(json.dumps([1, 2, 3]), encoding="utf-8")

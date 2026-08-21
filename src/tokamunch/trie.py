@@ -3,5 +3,6 @@
 from .ids.trie import (  # noqa: F401
     build_ids_path_trie,
     generate_schema_paths_from_trie,
+    insert_path,
     is_leaf_node,
 )

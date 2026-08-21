@@ -10,7 +10,7 @@ For internal implementation, import from the relevant subpackage:
   tokamunch.cli.*       — CLI entry point and commands
 """
 
-from . import plugins
+from . import plugin_api, plugins
 from .core.config import (
     CLIConfig,
     ConcurrencyConfig,
@@ -117,6 +117,7 @@ __all__ = [
     "normalise_schema_segment",
     "parse_concrete_path",
     "parse_schema_path",
+    "plugin_api",
     "plugins",
     "read_ids_records",
     "read_imas_records",

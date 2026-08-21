@@ -1,4 +1,4 @@
-"""Tests for _populate_ids behaviour around array-struct vs leaf nodes."""
+"""Tests for populate_ids behaviour around array-struct vs leaf nodes."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
+from tokamunch.ids.output import populate_ids
 from tokamunch.mapping import MappingRecord
-from tokamunch.write_ids import _populate_ids
 
 # ── minimal fake IDS objects ──────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ class TestPopulateIdsArrayStructNodes:
         ids = FakeEquilibrium()
         records = [_ok("equilibrium/time_slice[0]", 42)]
 
-        _populate_ids(ids, records)
+        populate_ids(ids, records)
 
         assert ids.time_slice.resize_calls == [1]
 
@@ -94,7 +94,7 @@ class TestPopulateIdsArrayStructNodes:
         ids = FakeEquilibrium()
         records = [_ok("equilibrium/time_slice[0]", 99)]
 
-        _populate_ids(ids, records)
+        populate_ids(ids, records)
 
         # After resize the element exists but none of its attributes should
         # have been set to the record value.
@@ -110,7 +110,7 @@ class TestPopulateIdsArrayStructNodes:
             _ok("equilibrium/time_slice[2]", None),
         ]
 
-        _populate_ids(ids, records)
+        populate_ids(ids, records)
 
         assert len(ids.time_slice) == 3
         # Resize should have been called exactly once (WriteContext deduplication).
@@ -124,7 +124,7 @@ class TestPopulateIdsArrayStructNodes:
             _ok("equilibrium/time_slice[0]/psi", 1.23),
         ]
 
-        _populate_ids(ids, records)
+        populate_ids(ids, records)
 
         assert ids.time_slice[0].psi == 1.23
 
@@ -137,7 +137,7 @@ class TestPopulateIdsArrayStructNodes:
             _ok("equilibrium/time_slice[0]/psi", 1.0),
         ]
 
-        _populate_ids(ids, records)
+        populate_ids(ids, records)
 
         assert ids.time_slice.resize_calls == [1]
 
@@ -148,7 +148,7 @@ class TestPopulateIdsArrayStructNodes:
         ]
 
         with pytest.raises(RuntimeError) as excinfo:
-            _populate_ids(ids, records)
+            populate_ids(ids, records)
 
         msg = str(excinfo.value)
         assert "equilibrium/ids_properties/homogeneous_time" in msg

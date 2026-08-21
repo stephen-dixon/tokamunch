@@ -1,5 +1,5 @@
 from tokamunch import IDSHelper
-from tokamunch.ids_helper import _build_cached_trie
+from tokamunch.ids.helper import _build_cached_trie
 
 
 def _make_helper(*schema_paths: str) -> IDSHelper:

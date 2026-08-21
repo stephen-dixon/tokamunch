@@ -1,4 +1,4 @@
-"""Tests for tokamunch.checkpoint — save/load/apply checkpoint state."""
+"""Tests for tokamunch.core.checkpoint — save/load/apply checkpoint state."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tokamunch.checkpoint import (
+from tokamunch.core.checkpoint import (
     Checkpoint,
     apply_checkpoint,
     load_checkpoint,
